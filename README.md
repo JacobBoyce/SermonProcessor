@@ -39,3 +39,30 @@ Times can be `m:ss`, `h:mm:ss` or plain seconds, with decimals (`41:27.5`). Set 
 - `.github/workflows/render.yml` runs both on a GitHub machine.
 
 Each output's length is `(out − in) + graphic seconds`. The crossfade overlaps the end of the clip, so the graphic always gets its full time on screen.
+
+## Run it on your Drive (Phase 2)
+
+Needs the GitHub secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` and the variable `DRIVE_ROOT_FOLDER_ID` (see the setup steps in the build plan).
+
+The Drive folder looks like this. Year and series subfolders can be any depth:
+
+```
+Sermon Cutter/
+  Incoming/2026/Romans/2026-10-18 service.mp4
+  Thumbnails/2026/Romans/2026-10-18 service.png   (same name, .png or .jpg)
+  Graphics/end-card.png
+  Output/                                          (filled in by the worker)
+```
+
+1. **Check Drive:** Actions → **Process from Drive** → Run workflow with action **list**. The run page lists every video, whether its thumbnail was found, and the graphics.
+2. **Render:** run it again with action **render** and a job like this:
+
+```json
+{"source": "2026/Romans/2026-10-18 service.mp4",
+ "outputs": [
+   {"name": "YouTube", "in": "2:45", "out": "41:27", "podcast": true,
+    "endGraphic": {"file": "end-card.png", "seconds": 5, "crossfade": 1}},
+   {"name": "Baptism", "in": "45:03", "out": "55:54", "endGraphic": null}]}
+```
+
+`source` is the path inside Incoming, and `file` is the path inside Graphics. Finished files go to `Output/2026/Romans/`, named with the date from the start of the video's file name. Running the same job again replaces those files instead of making copies. The run page links to each file in Drive.

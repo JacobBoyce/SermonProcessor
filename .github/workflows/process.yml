@@ -1,0 +1,54 @@
+name: Process from Drive
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "list = check what's in Drive. render = cut a video from Incoming."
+        type: choice
+        options: ["list", "render"]
+        default: "list"
+      job:
+        description: "For render: the job JSON (see README)"
+        required: false
+        default: ""
+      output_height:
+        description: "Output resolution: source keeps it, 1080 renders 1080p (much faster from 4K)"
+        type: choice
+        options: ["source", "1080"]
+        default: "source"
+
+concurrency:
+  group: process
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+      DRIVE_ROOT_FOLDER_ID: ${{ vars.DRIVE_ROOT_FOLDER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          pip install --quiet requests
+          if [ "${{ inputs.action }}" = "render" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg > /dev/null
+          fi
+
+      # /mnt has far more free space than the default work folder (10 GB sources).
+      - name: Prepare work folder
+        run: |
+          sudo mkdir -p /mnt/work && sudo chown "$USER" /mnt/work
+          df -h /mnt | tail -1
+
+      - name: Run
+        env:
+          JOB: ${{ inputs.job }}
+        run: python3 worker/run_job.py "${{ inputs.action }}" --job "$JOB" --height "${{ inputs.output_height }}" --work /mnt/work
