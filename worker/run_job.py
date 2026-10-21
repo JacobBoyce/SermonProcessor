@@ -36,6 +36,14 @@ IMAGE_EXT = (".png", ".jpg", ".jpeg")
 DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 
 
+def folder_id_from(value: str) -> str:
+    """Accept a bare folder ID or a whole Drive link, and return just the ID."""
+    value = value.strip()
+    if "/folders/" in value:
+        value = value.split("/folders/", 1)[1]
+    return re.split(r"[?&#/\s]", value, maxsplit=1)[0]
+
+
 def summary(text: str) -> None:
     """Add a line to the GitHub run page summary, when running in Actions."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -160,7 +168,7 @@ def main() -> int:
     parser.add_argument("--work", type=Path, default=Path("work"))
     args = parser.parse_args()
 
-    root_id = os.environ.get("DRIVE_ROOT_FOLDER_ID", "").strip()
+    root_id = folder_id_from(os.environ.get("DRIVE_ROOT_FOLDER_ID", ""))
     try:
         if not root_id:
             raise DriveError("Set the DRIVE_ROOT_FOLDER_ID variable to your Sermon Cutter folder's ID")

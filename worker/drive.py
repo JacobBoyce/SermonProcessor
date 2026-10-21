@@ -107,8 +107,8 @@ class Drive:
                 time.sleep(2 ** attempt)
                 continue
             if r.status_code == 404:
-                raise DriveError(f"Drive couldn't find that item ({url.split('?')[0].rsplit('/', 1)[-1]}). "
-                                 "Check the folder ID and that this account can see it.")
+                raise DriveError("Drive couldn't find that folder or file. Check that DRIVE_ROOT_FOLDER_ID "
+                                 "is just the folder ID, and that the signed-in account can see it.")
             raise DriveError(f"Drive said {r.status_code}: {r.text[:300]}")
         raise DriveError(f"Drive kept failing on {method} {url.split('?')[0]}")
 
