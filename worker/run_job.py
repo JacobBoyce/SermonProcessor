@@ -126,6 +126,8 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
     m = DATE_RE.match(p.stem)
     if m and not local_job.get("date"):
         local_job["date"] = m.group(1)
+    if not local_job.get("date") and not local_job.get("prefix"):
+        local_job["prefix"] = PurePosixPath(src.name).stem   # no date in the name: use the file name
     if height:
         local_job.setdefault("video", {})["height"] = height
 
@@ -135,6 +137,13 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
         if not g:
             continue
         name = str(g.get("file") or "")
+        if not name:
+            images = [f for f in drive.children(folders["Graphics"].id)
+                      if not f.is_folder and f.name.lower().endswith(IMAGE_EXT)]
+            if len(images) != 1:
+                raise render.JobError("Say which end graphic to use (\"file\"): "
+                                      + (", ".join(f.name for f in images) or "the Graphics folder is empty"))
+            name = images[0].name
         if name not in graphics:
             gf = drive.resolve(folders["Graphics"].id, name)
             graphics[name] = str(drive.download(gf, work / "graphics" / gf.name, progress=lambda *_: None))

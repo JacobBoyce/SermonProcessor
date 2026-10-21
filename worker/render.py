@@ -12,6 +12,7 @@ Job file:
 {
   "source": "path/to/service.mp4",
   "date": "2026-10-18",                 # optional, used in file names
+  "prefix": "Romans 1",                 # optional, used in file names instead of the date
   "folder": "2026/Romans",              # optional, output subfolder (year/series)
   "video": {"height": "source", "crf": 20, "preset": "faster"},   # optional
   "outputs": [
@@ -163,7 +164,8 @@ def load_outputs(job: dict, info: SourceInfo, base: Path) -> list[Output]:
             raise JobError(f"{label}: two outputs share this name; give each a different name")
         seen.add(name.lower())
         start = parse_time(raw.get("in"), f"{label} in")
-        end = parse_time(raw.get("out"), f"{label} out")
+        out_raw = raw.get("out")
+        end = info.duration if str(out_raw).strip().lower() == "end" else parse_time(out_raw, f"{label} out")
         if end <= start:
             raise JobError(f"{label}: out ({fmt_time(end)}) must be after in ({fmt_time(start)})")
         if end > info.duration + 0.05:
@@ -326,7 +328,8 @@ def render(job_path: Path, out_dir: Path) -> list[Path]:
     for part in folder.split("/") if folder else []:
         dest_dir = dest_dir / safe_name(part)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    prefix = f"{date} " if date else ""
+    label = str(job.get("prefix") or date).strip()
+    prefix = f"{label} " if label else ""
 
     written: list[Path] = []
     for out in outputs:

@@ -148,7 +148,16 @@ class Drive:
         parts = [p for p in rel_path.replace("\\", "/").split("/") if p]
         walked = current.name
         for i, part in enumerate(parts):
-            nxt = self.child(current.id, part, folder=None if i == len(parts) - 1 else True)
+            last = i == len(parts) - 1
+            nxt = self.child(current.id, part, folder=None if last else True)
+            if nxt is None and last:
+                # Allow the name without its extension: "service" finds "service.mp4".
+                stem = [f for f in self.children(current.id)
+                        if not f.is_folder and f.name.rsplit(".", 1)[0].lower() == part.lower()]
+                if len(stem) > 1:
+                    names = ", ".join(f.name for f in stem)
+                    raise DriveError(f"'{part}' matches more than one file in '{walked}' ({names}); add the extension")
+                nxt = stem[0] if stem else None
             if nxt is None:
                 raise DriveError(f"'{part}' wasn't found in '{walked}'")
             current, walked = nxt, f"{walked}/{part}"
