@@ -1,0 +1,17 @@
+{
+  // Cloudflare Worker for the Sermon Processor web app.
+  // The name must match the Worker's name in the Cloudflare dashboard.
+  "name": "sermon-processor",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./web",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  // Settings (APP_PASSCODE, GITHUB_TOKEN, GOOGLE_..., DRIVE_ROOT_FOLDER_ID, GITHUB_REPO)
+  // live in the dashboard under Settings > Variables and Secrets. keep_vars stops a
+  // deploy from wiping the plain-text ones.
+  "keep_vars": true,
+  "observability": { "enabled": true }
+}

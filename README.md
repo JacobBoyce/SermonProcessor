@@ -82,3 +82,7 @@ Cloudflare Pages settings: build command empty, build output directory `web`. Se
 | `GOOGLE_CLIENT_SECRET` | Secret | Same as the GitHub secret |
 | `GOOGLE_REFRESH_TOKEN` | Secret | Same as the GitHub secret |
 | `DRIVE_ROOT_FOLDER_ID` | Text | Same as the GitHub variable |
+
+### Hosting as a Cloudflare Worker
+
+Cloudflare may set the project up as a **Worker** instead of Pages. That works too: `wrangler.jsonc` and `src/worker.js` serve the same page and API. The Worker's name in Cloudflare must be `sermon-processor` (or change `name` in `wrangler.jsonc` to match). Add the settings above under the Worker's **Settings → Variables and Secrets**; `keep_vars` stops deploys from removing them. Every push to `main` redeploys.
