@@ -1,0 +1,73 @@
+name: Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      sample_minutes:
+        description: "Length of the generated test clip, in minutes"
+        default: "3"
+        required: true
+      sample_height:
+        description: "Test clip resolution"
+        type: choice
+        options: ["1080", "2160"]
+        default: "1080"
+      output_height:
+        description: "Output resolution: source keeps it, 1080 renders 1080p (much faster from 4K)"
+        type: choice
+        options: ["source", "1080"]
+        default: "source"
+      outputs:
+        description: "Optional: your own outputs as JSON, to replace the sample in/out times"
+        required: false
+        default: ""
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          ffmpeg -version | head -1
+
+      # The runner's /mnt disk has far more free space than the default work
+      # folder, which matters for 10 GB 4K sources.
+      - name: Prepare work folder
+        run: |
+          sudo mkdir -p /mnt/work && sudo chown "$USER" /mnt/work
+          df -h /mnt | tail -1
+
+      - name: Make test clip and job
+        run: python3 worker/make_sample.py --dir /mnt/work/sample --minutes "${{ inputs.sample_minutes }}" --height "${{ inputs.sample_height }}"
+
+      - name: Apply options
+        env:
+          OUTPUTS: ${{ inputs.outputs }}
+          HEIGHT: ${{ inputs.output_height }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          path = "/mnt/work/sample/job.json"
+          job = json.load(open(path))
+          job["video"]["height"] = os.environ["HEIGHT"]
+          custom = os.environ.get("OUTPUTS", "").strip()
+          if custom:
+              job["outputs"] = json.loads(custom)
+          json.dump(job, open(path, "w"), indent=2)
+          print(json.dumps(job, indent=2))
+          EOF
+
+      - name: Render
+        run: python3 worker/render.py /mnt/work/sample/job.json --out-dir /mnt/work/output
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-files
+          path: /mnt/work/output
+          retention-days: 3
