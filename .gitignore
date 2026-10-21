@@ -6,3 +6,4 @@ __pycache__/
 .dev.vars
 .wrangler/
 node_modules/
+web/version.json

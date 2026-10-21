@@ -19,7 +19,9 @@ Job file:
     {"name": "YouTube", "in": "2:45", "out": "41:27",
      "endGraphic": {"file": "graphics/card.png", "seconds": 5, "crossfade": 1.5},
      "podcast": true},
-    {"name": "Baptism", "in": "45:03", "out": "55:54", "endGraphic": null}
+    {"name": "Baptism", "in": "45:03", "out": "55:54", "endGraphic": null},
+    {"name": "Sermon no announcements", "segments": [{"in": "2:45", "out": "20:10"},
+                                                    {"in": "23:40", "out": "41:27"}]}
   ]
 }
 Times may be seconds (165, 165.5) or "m:ss", "h:mm:ss", with optional decimals.
@@ -141,14 +143,38 @@ class Graphic:
 @dataclass
 class Output:
     name: str
-    start: float
-    end: float
+    segments: list[tuple[float, float]]     # parts of the source to keep, in order
     graphic: Graphic | None
     podcast: bool
 
     @property
     def clip(self) -> float:
-        return self.end - self.start
+        return sum(b - a for a, b in self.segments)
+
+
+def load_segments(raw: dict, info: SourceInfo, label: str) -> list[tuple[float, float]]:
+    """An output keeps one part ("in"/"out") or several ("segments": [{"in","out"}, ...])."""
+    parts = raw.get("segments")
+    if parts is None:
+        parts = [{"in": raw.get("in"), "out": raw.get("out")}]
+    if not isinstance(parts, list) or not parts:
+        raise JobError(f"{label}: needs at least one in/out part")
+    segments: list[tuple[float, float]] = []
+    for j, part in enumerate(parts, 1):
+        where = f"{label} part {j}" if len(parts) > 1 else label
+        start = parse_time(part.get("in"), f"{where} in")
+        out_raw = part.get("out")
+        end = info.duration if str(out_raw).strip().lower() == "end" else parse_time(out_raw, f"{where} out")
+        if end <= start:
+            raise JobError(f"{where}: out ({fmt_time(end)}) must be after in ({fmt_time(start)})")
+        if end > info.duration + 0.05:
+            raise JobError(f"{where}: out ({fmt_time(end)}) is past the end of the video ({fmt_time(info.duration)})")
+        end = min(end, info.duration)
+        if segments and start < segments[-1][1] - 0.001:
+            raise JobError(f"{where}: starts at {fmt_time(start)}, before the previous part ends "
+                           f"({fmt_time(segments[-1][1])}). List parts in order without overlaps.")
+        segments.append((start, end))
+    return segments
 
 
 def load_outputs(job: dict, info: SourceInfo, base: Path) -> list[Output]:
@@ -163,14 +189,8 @@ def load_outputs(job: dict, info: SourceInfo, base: Path) -> list[Output]:
         if name.lower() in seen:
             raise JobError(f"{label}: two outputs share this name; give each a different name")
         seen.add(name.lower())
-        start = parse_time(raw.get("in"), f"{label} in")
-        out_raw = raw.get("out")
-        end = info.duration if str(out_raw).strip().lower() == "end" else parse_time(out_raw, f"{label} out")
-        if end <= start:
-            raise JobError(f"{label}: out ({fmt_time(end)}) must be after in ({fmt_time(start)})")
-        if end > info.duration + 0.05:
-            raise JobError(f"{label}: out ({fmt_time(end)}) is past the end of the video ({fmt_time(info.duration)})")
-        end = min(end, info.duration)
+        segments = load_segments(raw, info, label)
+        clip = sum(b - a for a, b in segments)
 
         graphic = None
         g = raw.get("endGraphic")
@@ -184,10 +204,11 @@ def load_outputs(job: dict, info: SourceInfo, base: Path) -> list[Output]:
             if seconds <= 0:
                 raise JobError(f"{label}: graphic seconds must be more than 0")
             crossfade = parse_number(g.get("crossfade", 1), f"{label} crossfade")
-            if crossfade >= end - start:
-                raise JobError(f"{label}: crossfade ({crossfade:g}s) must be shorter than the clip ({end - start:.1f}s)")
+            last = segments[-1][1] - segments[-1][0]
+            if crossfade >= last:
+                raise JobError(f"{label}: crossfade ({crossfade:g}s) must be shorter than the last part ({last:.1f}s)")
             graphic = Graphic(gfile, seconds, crossfade)
-        outputs.append(Output(name, start, end, graphic, bool(raw.get("podcast"))))
+        outputs.append(Output(name, segments, graphic, bool(raw.get("podcast"))))
     return outputs
 
 
@@ -205,48 +226,71 @@ def target_size(info: SourceInfo, setting) -> tuple[int, int]:
     return w - w % 2, h - h % 2
 
 
+JOIN_FADE = 0.02   # tiny audio fade at each join between parts, so cuts don't click
+
+
+def segment_inputs(src: Path, segments: list[tuple[float, float]]) -> list[str]:
+    """One input per part. -ss before -i seeks fast; re-encoding keeps cuts frame-accurate."""
+    args: list[str] = []
+    for a, b in segments:
+        args += ["-ss", f"{a:.3f}", "-t", f"{b - a:.3f}", "-i", str(src)]
+    return args
+
+
 def build_video_cmd(src: Path, info: SourceInfo, out: Output, dest: Path, size: tuple[int, int],
                     crf: int, preset: str) -> tuple[list[str], float]:
     w, h = size
     fit = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={info.fps},format=yuv420p")
-    cmd = ["ffmpeg", "-hide_banner", "-y", "-nostats", "-progress", "pipe:1",
-           # -ss before -i seeks fast; with re-encoding the cut is still frame-accurate
-           "-ss", f"{out.start:.3f}", "-t", f"{out.clip:.3f}", "-i", str(src)]
-    inputs = 1
+    n = len(out.segments)
+    cmd = ["ffmpeg", "-hide_banner", "-y", "-nostats", "-progress", "pipe:1"] + segment_inputs(src, out.segments)
+    inputs = n
     if not info.has_audio:
         cmd += ["-f", "lavfi", "-t", f"{out.clip:.3f}", "-i", f"anullsrc=r={AUDIO_RATE}:cl=stereo"]
-        audio_in = f"{inputs}:a"
+        silent_in = inputs
         inputs += 1
+
+    # Join the parts: video hard cut, audio with a tiny fade at each join.
+    parts = []
+    for i, (a, b) in enumerate(out.segments):
+        d = b - a
+        parts.append(f"[{i}:v]{fit}[v{i}]")
+        if info.has_audio:
+            fades = f",afade=t=in:d={JOIN_FADE},afade=t=out:st={max(d - JOIN_FADE, 0):.3f}:d={JOIN_FADE}" if n > 1 else ""
+            parts.append(f"[{i}:a:0]aresample={AUDIO_RATE}{fades}[a{i}]")
+    if n > 1:
+        pairs = "".join(f"[v{i}][a{i}]" if info.has_audio else f"[v{i}]" for i in range(n))
+        parts.append(f"{pairs}concat=n={n}:v=1:a={1 if info.has_audio else 0}[joined]" +
+                     ("[amain]" if info.has_audio else ""))
+        parts.append("[joined]settb=AVTB[main]")
     else:
-        audio_in = "0:a:0"
+        parts.append("[v0]settb=AVTB[main]")
+        if info.has_audio:
+            parts.append("[a0]anull[amain]")
+    if not info.has_audio:
+        parts.append(f"[{silent_in}:a]anull[amain]")
 
     if out.graphic is None:
         total = out.clip
-        graph = (f"[0:v]{fit}[v];"
-                 f"[{audio_in}]aresample={AUDIO_RATE},afade=t=in:d=0.05,"
-                 f"afade=t=out:st={max(out.clip - 0.05, 0):.3f}:d=0.05[a]")
+        parts.append("[main]null[v]")
+        parts.append(f"[amain]afade=t=in:d=0.05,afade=t=out:st={max(out.clip - 0.05, 0):.3f}:d=0.05[a]")
     else:
         g = out.graphic
         # Graphic input runs crossfade + hold seconds, so it is fully on screen for `seconds`.
         cmd += ["-loop", "1", "-framerate", info.fps, "-t", f"{g.crossfade + g.seconds:.3f}", "-i", str(g.file)]
         gi = inputs
-        inputs += 1
         total = out.clip + g.seconds
         fade_len = g.crossfade if g.crossfade > 0 else 0.05
+        parts.append(f"[{gi}:v]{fit},settb=AVTB[card]")   # same timebase as [main] for xfade
         if g.crossfade > 0:
-            video = (f"[0:v]{fit}[main];[{gi}:v]{fit}[card];"
-                     f"[main][card]xfade=transition=fade:duration={g.crossfade:.3f}:"
-                     f"offset={out.clip - g.crossfade:.3f}[v]")
+            parts.append(f"[main][card]xfade=transition=fade:duration={g.crossfade:.3f}:"
+                         f"offset={out.clip - g.crossfade:.3f}[v]")
         else:
-            # hard cut: drop the graphic's crossfade lead-in (0 here) and join
-            video = f"[0:v]{fit}[main];[{gi}:v]{fit}[card];[main][card]concat=n=2:v=1:a=0[v]"
-        audio = (f"[{audio_in}]aresample={AUDIO_RATE},afade=t=in:d=0.05,"
-                 f"afade=t=out:st={out.clip - fade_len:.3f}:d={fade_len:.3f},"
-                 f"apad=whole_dur={total:.3f}[a]")
-        graph = f"{video};{audio}"
+            parts.append("[main][card]concat=n=2:v=1:a=0[v]")
+        parts.append(f"[amain]afade=t=in:d=0.05,afade=t=out:st={out.clip - fade_len:.3f}:d={fade_len:.3f},"
+                     f"apad=whole_dur={total:.3f}[a]")
 
-    cmd += ["-filter_complex", graph, "-map", "[v]", "-map", "[a]",
+    cmd += ["-filter_complex", ";".join(parts), "-map", "[v]", "-map", "[a]",
             "-t", f"{total:.3f}",
             "-c:v", "libx264", "-preset", preset, "-crf", str(crf),
             "-profile:v", "high", "-pix_fmt", "yuv420p",
@@ -259,15 +303,21 @@ def build_podcast_cmd(src: Path, info: SourceInfo, out: Output, dest: Path, titl
                       date: str) -> tuple[list[str], float]:
     if not info.has_audio:
         raise JobError(f"{out.name}: the video has no audio, so there's no podcast to make")
+    n = len(out.segments)
     fade = min(1.0, out.clip / 4)
-    audio = (f"aresample={AUDIO_RATE},"
-             f"loudnorm=I=-16:TP=-1.5:LRA=11,"     # podcast loudness standard
-             f"afade=t=in:d={fade:.3f},afade=t=out:st={out.clip - fade:.3f}:d={fade:.3f}")
-    cmd = ["ffmpeg", "-hide_banner", "-y", "-nostats", "-progress", "pipe:1",
-           "-ss", f"{out.start:.3f}", "-t", f"{out.clip:.3f}", "-i", str(src),
-           "-vn", "-af", audio, "-ac", "1", "-ar", "44100",
-           "-c:a", "libmp3lame", "-b:a", PODCAST_BITRATE,
-           "-id3v2_version", "3", "-metadata", f"title={title}"]
+    parts = []
+    for i, (a, b) in enumerate(out.segments):
+        d = b - a
+        fades = f",afade=t=in:d={JOIN_FADE},afade=t=out:st={max(d - JOIN_FADE, 0):.3f}:d={JOIN_FADE}" if n > 1 else ""
+        parts.append(f"[{i}:a:0]aresample={AUDIO_RATE}{fades}[a{i}]")
+    joined = "".join(f"[a{i}]" for i in range(n))
+    parts.append(f"{joined}concat=n={n}:v=0:a=1[joined]" if n > 1 else "[a0]anull[joined]")
+    parts.append(f"[joined]loudnorm=I=-16:TP=-1.5:LRA=11,"     # podcast loudness standard
+                 f"afade=t=in:d={fade:.3f},afade=t=out:st={out.clip - fade:.3f}:d={fade:.3f}[out]")
+    cmd = (["ffmpeg", "-hide_banner", "-y", "-nostats", "-progress", "pipe:1"] + segment_inputs(src, out.segments) +
+           ["-filter_complex", ";".join(parts), "-map", "[out]", "-ac", "1", "-ar", "44100",
+            "-c:a", "libmp3lame", "-b:a", PODCAST_BITRATE,
+            "-id3v2_version", "3", "-metadata", f"title={title}"])
     if date:
         cmd += ["-metadata", f"date={date[:4]}"]
     cmd.append(str(dest))
@@ -336,7 +386,8 @@ def render(job_path: Path, out_dir: Path) -> list[Path]:
         dest = dest_dir / f"{prefix}{out.name}.mp4"
         extra = (f", graphic {out.graphic.seconds:g}s, crossfade {out.graphic.crossfade:g}s"
                  if out.graphic else ", no graphic")
-        print(f"\n[{out.name}] {fmt_time(out.start)} → {fmt_time(out.end)} ({fmt_time(out.clip)}){extra}, {size[0]}x{size[1]}")
+        spans = " + ".join(f"{fmt_time(a)}→{fmt_time(b)}" for a, b in out.segments)
+        print(f"\n[{out.name}] {spans} ({fmt_time(out.clip)}){extra}, {size[0]}x{size[1]}")
         cmd, total = build_video_cmd(src, info, out, dest, size, crf, preset)
         run_ffmpeg(cmd, total, out.name)
         written.append(dest)

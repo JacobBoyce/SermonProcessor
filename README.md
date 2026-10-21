@@ -65,13 +65,19 @@ Sermon Cutter/
    {"name": "Baptism", "in": "45:03", "out": "55:54", "endGraphic": null}]}
 ```
 
+To skip a section in the middle of an output, give it `segments` instead of `in`/`out`. The parts are joined with a clean cut:
+
+```json
+{"name": "YouTube", "segments": [{"in": "2:45", "out": "20:10"}, {"in": "23:40", "out": "41:27"}]}
+```
+
 `source` is the path inside Incoming, and `file` is the path inside Graphics. Finished files go to `Output/2026/Romans/`, named with the date from the start of the video's file name. Running the same job again replaces those files instead of making copies. The run page links to each file in Drive.
 
 ## Web app (Phases 3–4)
 
 `web/index.html` is the setup screen and `functions/api/` is its API, both hosted on Cloudflare Pages (free). The API reads Drive with the same Google sign-in as the worker, and starts **Process from Drive** on GitHub.
 
-Cloudflare Pages settings: build command empty, build output directory `web`. Settings → Variables and secrets:
+Cloudflare Pages settings: build command `sh scripts/stamp.sh` (stamps the commit into the page's bottom-right corner), build output directory `web`. Settings → Variables and secrets:
 
 | Name | Type | Value |
 | --- | --- | --- |
