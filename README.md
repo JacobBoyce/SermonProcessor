@@ -91,4 +91,4 @@ Cloudflare Pages settings: build command `sh scripts/stamp.sh` (stamps the commi
 
 ### Hosting as a Cloudflare Worker
 
-Cloudflare may set the project up as a **Worker** instead of Pages. That works too: `wrangler.jsonc` and `src/worker.js` serve the same page and API. The Worker's name in Cloudflare must be `sermon-processor` (or change `name` in `wrangler.jsonc` to match). Add the settings above under the Worker's **Settings → Variables and Secrets**; `keep_vars` stops deploys from removing them. Every push to `main` redeploys.
+Cloudflare may set the project up as a **Worker** instead of Pages. That works too: rename `wrangler.worker.jsonc` to `wrangler.jsonc` (it's renamed so Pages doesn't warn about it), and `src/worker.js` serves the same page and API. The Worker's name in Cloudflare must be `sermon-processor` (or change `name` in that file to match). Add the settings above under the Worker's **Settings → Variables and Secrets**; `keep_vars` stops deploys from removing them. Every push to `main` redeploys.
