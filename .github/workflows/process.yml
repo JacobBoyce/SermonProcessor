@@ -1,4 +1,5 @@
 name: Process from Drive
+run-name: ${{ inputs.label || format('Drive {0}', inputs.action) }}
 
 on:
   workflow_dispatch:
@@ -17,6 +18,10 @@ on:
         type: choice
         options: ["source", "1080"]
         default: "source"
+      label:
+        description: "Optional: a name for this run (the web app fills this in)"
+        required: false
+        default: ""
 
 concurrency:
   group: process

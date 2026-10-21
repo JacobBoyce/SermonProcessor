@@ -66,3 +66,19 @@ Sermon Cutter/
 ```
 
 `source` is the path inside Incoming, and `file` is the path inside Graphics. Finished files go to `Output/2026/Romans/`, named with the date from the start of the video's file name. Running the same job again replaces those files instead of making copies. The run page links to each file in Drive.
+
+## Web app (Phases 3–4)
+
+`web/index.html` is the setup screen and `functions/api/` is its API, both hosted on Cloudflare Pages (free). The API reads Drive with the same Google sign-in as the worker, and starts **Process from Drive** on GitHub.
+
+Cloudflare Pages settings: build command empty, build output directory `web`. Settings → Variables and secrets:
+
+| Name | Type | Value |
+| --- | --- | --- |
+| `APP_PASSCODE` | Secret | The code people type to open the app |
+| `GITHUB_TOKEN` | Secret | Fine-grained token for this repo with **Actions: Read and write** |
+| `GITHUB_REPO` | Text | `JacobBoyce/SermonProcessor` |
+| `GOOGLE_CLIENT_ID` | Secret | Same as the GitHub secret |
+| `GOOGLE_CLIENT_SECRET` | Secret | Same as the GitHub secret |
+| `GOOGLE_REFRESH_TOKEN` | Secret | Same as the GitHub secret |
+| `DRIVE_ROOT_FOLDER_ID` | Text | Same as the GitHub variable |
