@@ -4,6 +4,7 @@ import { onRequest as checkPasscode } from "../functions/api/_middleware.js";
 import * as files from "../functions/api/files.js";
 import * as jobs from "../functions/api/jobs.js";
 import * as image from "../functions/api/image/[id].js";
+import * as video from "../functions/api/video/[id].js";
 import { json } from "../lib/http.js";
 
 function route(request, env, ctx) {
@@ -15,6 +16,8 @@ function route(request, env, ctx) {
   if (pathname === "/api/jobs" && method === "POST") return jobs.onRequestPost(base);
   const img = pathname.match(/^\/api\/image\/([\w-]+)$/);
   if (img && method === "GET") return image.onRequestGet({ ...base, params: { id: img[1] } });
+  const vid = pathname.match(/^\/api\/video\/([\w-]+)$/);
+  if (vid && method === "GET") return video.onRequestGet({ ...base, params: { id: vid[1] } });
   return json({ error: "Not found" }, 404);
 }
 
