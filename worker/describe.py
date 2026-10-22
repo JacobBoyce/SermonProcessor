@@ -1,7 +1,7 @@
 """Write a sermon description with Gemini from the rendered audio.
 
 Makes a small audio-only copy of the output, uploads it to the Gemini Files API,
-asks for a title, summary, scripture list and chapters (as JSON), and builds a
+asks for a title and a short summary (as JSON), and builds a
 plain-text description that is safe for YouTube (no < or >, under 5,000
 characters) and usable for the podcast feed.
 
@@ -25,18 +25,14 @@ DEFAULT_MODEL = "gemini-3.8-flash"
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "description.md"
 YOUTUBE_LIMIT = 5000
 
+# Gemini returns this shape. Edit prompts/description.md to change what goes in it.
 SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "title": {"type": "STRING"},
         "summary": {"type": "STRING"},
-        "scriptures": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "chapters": {"type": "ARRAY", "items": {
-            "type": "OBJECT",
-            "properties": {"time": {"type": "STRING"}, "title": {"type": "STRING"}},
-            "required": ["time", "title"]}},
     },
-    "required": ["title", "summary", "scriptures", "chapters"],
+    "required": ["title", "summary"],
 }
 
 

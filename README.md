@@ -98,6 +98,6 @@ Cloudflare may set the project up as a **Worker** instead of Pages. That works t
 
 ## Descriptions (Phase 5)
 
-After rendering, the worker sends a small audio-only copy of the main output (the podcast output if there is one) to Gemini and saves `<date> description.txt` and `.json` next to the videos in Output: a title, a 3–5 sentence summary, the scripture references, and chapter times. A `.txt` with the video's name in Incoming is used instead, without calling Gemini. A description problem never fails the render.
+After rendering, the worker sends a small audio-only copy of the main output (the podcast output if there is one) to Gemini and saves `<date> description.txt` and `.json` next to the videos in Output: a title and a summary of 5 sentences or less about the series and what this sermon teaches. A `.txt` with the video's name in Incoming is used instead, without calling Gemini. A description problem never fails the render.
 
 GitHub settings: secret `GEMINI_API_KEY` (required), variables `GEMINI_MODEL` (optional, default `gemini-3.8-flash`) and `DESCRIPTION_EXAMPLE` (optional: a past description whose style to copy). The instructions Gemini gets are in `prompts/description.md`; edit them on GitHub to change the tone.
