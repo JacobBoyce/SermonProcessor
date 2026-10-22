@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Run a job against Google Drive: download, render, upload.
 
-Drive layout (inside the folder named by DRIVE_ROOT_FOLDER_ID):
-    Incoming/2026/Romans/2026-10-18 service.mp4
-    Thumbnails/2026/Romans/2026-10-18 service.png      (same name, .png/.jpg)
-    Graphics/end-card.png
-    Output/2026/Romans/...                              (created as needed)
+Drive layout (inside the folder named by DRIVE_ROOT_FOLDER_ID). Any subfolders
+work: year/month, year/series, or none.
+    Incoming/2026/October/2026-10-18 service.mp4
+    Incoming/2026/October/2026-10-18 service.txt        (optional: your own description)
+    Thumbnails/2026/October/2026-10-18 service.png      (same name, .png/.jpg)
+    Graphics/2026/Romans/end-card.png                   (or Graphics/end-card.png)
+    Output/2026/October/...                             (created as needed)
+
+Thumbnails and description files are looked for in the same subfolders as the
+video first, then anywhere with the same name (if only one matches).
 
 Usage:
     python worker/run_job.py list
@@ -29,6 +34,7 @@ from pathlib import Path, PurePosixPath
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render  # noqa: E402
 from drive import Drive, DriveError  # noqa: E402
+import describe  # noqa: E402
 
 FOLDERS = ("Incoming", "Graphics", "Thumbnails", "Output")
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".mts", ".avi"}
@@ -63,20 +69,33 @@ def top_folders(drive, root_id: str) -> dict:
     return found
 
 
-def find_thumbnail(drive, thumbs_id: str, rel_video: str):
-    """Thumbnail with the same name and subfolders as the video, in .png or .jpg."""
+def find_matching(drive, folder_id: str, rel_video: str, exts: tuple[str, ...]):
+    """A file named like the video (e.g. .png for a thumbnail, .txt for a description).
+
+    First the same subfolders as the video; if the folders don't line up, any file
+    with that name anywhere under the folder, as long as only one matches.
+    """
     p = PurePosixPath(rel_video)
-    folder = thumbs_id
+    folder = folder_id
+    same_path = True
     for part in p.parent.parts:
         f = drive.child(folder, part, folder=True)
         if f is None:
-            return None
+            same_path = False
+            break
         folder = f.id
-    for ext in IMAGE_EXT:
-        f = drive.child(folder, p.stem + ext, folder=False)
-        if f:
-            return f
-    return None
+    if same_path:
+        for ext in exts:
+            f = drive.child(folder, p.stem + ext, folder=False)
+            if f:
+                return f
+    hits = [f for path, f in drive.walk(folder_id)
+            if PurePosixPath(path).stem.lower() == p.stem.lower() and PurePosixPath(path).suffix.lower() in exts]
+    return hits[0] if len(hits) == 1 else None
+
+
+def find_thumbnail(drive, thumbs_id: str, rel_video: str):
+    return find_matching(drive, thumbs_id, rel_video, IMAGE_EXT)
 
 
 def mb(n: int) -> str:
@@ -138,15 +157,15 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
             continue
         name = str(g.get("file") or "")
         if not name:
-            images = [f for f in drive.children(folders["Graphics"].id)
-                      if not f.is_folder and f.name.lower().endswith(IMAGE_EXT)]
+            images = [path for path, f in drive.walk(folders["Graphics"].id) if path.lower().endswith(IMAGE_EXT)]
             if len(images) != 1:
                 raise render.JobError("Say which end graphic to use (\"file\"): "
-                                      + (", ".join(f.name for f in images) or "the Graphics folder is empty"))
-            name = images[0].name
+                                      + (", ".join(images) or "the Graphics folder is empty"))
+            name = images[0]
         if name not in graphics:
             gf = drive.resolve(folders["Graphics"].id, name)
-            graphics[name] = str(drive.download(gf, work / "graphics" / gf.name, progress=lambda *_: None))
+            local = work / "graphics" / str(len(graphics)) / gf.name     # same names in different folders can't clash
+            graphics[name] = str(drive.download(gf, local, progress=lambda *_: None))
         g["file"] = graphics[name]
 
     thumb = find_thumbnail(drive, folders["Thumbnails"].id, rel_source)
@@ -167,6 +186,52 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
         where = f"Output/{rel_dir}/{f.name}" if rel_dir != "." else f"Output/{f.name}"
         print(f"  {where}")
         summary(f"| {where} | {mb(f.stat().st_size)} | [open](https://drive.google.com/file/d/{file_id}/view) |")
+
+    write_description(drive, folders, rel_source, local_job, written, out_dir, work)
+
+
+def write_description(drive, folders: dict, rel_source: str, job: dict, written: list[Path],
+                      out_dir: Path, work: Path) -> None:
+    """Save '<name> description.txt' (and .json) next to the outputs.
+
+    Uses the person's own .txt from Incoming when there is one; otherwise asks
+    Gemini. Problems here are reported but never fail the job: the videos are
+    already in Drive by now.
+    """
+    opts = job.get("describe", True)
+    if isinstance(opts, bool):
+        opts = {"enabled": opts}
+    if not opts.get("enabled", True) or not written:
+        return
+    main = next((f for f in written if f.suffix == ".mp3"), written[0])   # podcast audio, else first video
+    label = str(job.get("prefix") or job.get("date") or "").strip()
+    base = f"{label} description" if label else "description"
+    rel_dir = main.parent.relative_to(out_dir).as_posix()
+    folder_id = drive.ensure_folder(folders["Output"].id, "" if rel_dir == "." else rel_dir)
+    print("\nDescription:")
+    try:
+        own = find_matching(drive, folders["Incoming"].id, rel_source, (".txt",))
+        if own:
+            local = drive.download(own, work / "own-description.txt", progress=lambda *_: None)
+            text = local.read_text(errors="replace").strip()
+            title, body, data, source = str(job.get("title") or label), describe.clean(text)[:describe.YOUTUBE_LIMIT], None, own.name
+        else:
+            title, body, data = describe.describe(main, work, str(opts.get("notes") or ""))
+            source = os.environ.get("GEMINI_MODEL", "").strip() or describe.DEFAULT_MODEL
+        txt = main.parent / f"{base}.txt"
+        txt.write_text(f"{title}\n\n{body}\n" if title else f"{body}\n")
+        drive.upload(txt, folder_id, progress=lambda *_: None)
+        record = {"title": title, "description": body, "source": source, "gemini": data}
+        js = main.parent / f"{base}.json"
+        js.write_text(json.dumps(record, indent=2, ensure_ascii=False))
+        drive.upload(js, folder_id, progress=lambda *_: None)
+        where = f"Output/{rel_dir}/{txt.name}" if rel_dir != "." else f"Output/{txt.name}"
+        print(f"  from {source} → {where}\n\n{title}\n\n{body}")
+        summary(f"\n## Description ({'your file ' + source if own else source})\n\n**{title}**\n\n" +
+                body.replace("\n", "  \n"))
+    except Exception as exc:   # noqa: BLE001 - a description problem must never fail a finished render
+        print(f"  Skipped: {exc}")
+        summary(f"\n**Description skipped:** {exc}")
 
 
 def main() -> int:

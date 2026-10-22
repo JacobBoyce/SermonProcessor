@@ -44,15 +44,18 @@ Each output's length is `(out − in) + graphic seconds`. The crossfade overlaps
 
 Needs the GitHub secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` and the variable `DRIVE_ROOT_FOLDER_ID` (see the setup steps in the build plan).
 
-The Drive folder looks like this. Year and series subfolders can be any depth:
+The Drive folder looks like this. Subfolders can be anything (year/month, year/series) at any depth:
 
 ```
 Sermon Cutter/
-  Incoming/2026/Romans/2026-10-18 service.mp4
-  Thumbnails/2026/Romans/2026-10-18 service.png   (same name, .png or .jpg)
-  Graphics/end-card.png
-  Output/                                          (filled in by the worker)
+  Incoming/2026/October/2026-10-18 service.mp4
+  Incoming/2026/October/2026-10-18 service.txt   (optional: your own description; Gemini is skipped)
+  Thumbnails/2026/October/2026-10-18 service.png (same name, .png or .jpg)
+  Graphics/2026/Romans/romans-card.png           (or Graphics/Generic/..., or top level)
+  Output/                                         (filled in by the worker, same subfolders)
 ```
+
+Thumbnails and description files are matched in the same subfolders as the video first, then by name anywhere if only one file has that name.
 
 1. **Check Drive:** Actions → **Process from Drive** → Run workflow with action **list**. The run page lists every video, whether its thumbnail was found, and the graphics.
 2. **Render:** run it again with action **render** and a job like this:
@@ -92,3 +95,9 @@ Cloudflare Pages settings: build command `sh scripts/stamp.sh` (stamps the commi
 ### Hosting as a Cloudflare Worker
 
 Cloudflare may set the project up as a **Worker** instead of Pages. That works too: rename `wrangler.worker.jsonc` to `wrangler.jsonc` (it's renamed so Pages doesn't warn about it), and `src/worker.js` serves the same page and API. The Worker's name in Cloudflare must be `sermon-processor` (or change `name` in that file to match). Add the settings above under the Worker's **Settings → Variables and Secrets**; `keep_vars` stops deploys from removing them. Every push to `main` redeploys.
+
+## Descriptions (Phase 5)
+
+After rendering, the worker sends a small audio-only copy of the main output (the podcast output if there is one) to Gemini and saves `<date> description.txt` and `.json` next to the videos in Output: a title, a 3–5 sentence summary, the scripture references, and chapter times. A `.txt` with the video's name in Incoming is used instead, without calling Gemini. A description problem never fails the render.
+
+GitHub settings: secret `GEMINI_API_KEY` (required), variables `GEMINI_MODEL` (optional, default `gemini-3.8-flash`) and `DESCRIPTION_EXAMPLE` (optional: a past description whose style to copy). The instructions Gemini gets are in `prompts/description.md`; edit them on GitHub to change the tone.

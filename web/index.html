@@ -102,6 +102,9 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .tfield { display: grid; gap: 4px; }
 .tfield .tin { display: flex; gap: 4px; }
 .tfield input { width: calc(10ch + 24px); flex: none; }
+.folders { display: flex; gap: 10px; flex-wrap: wrap; }
+.folders label { flex: 1 1 160px; }
+.describe { display: grid; gap: 10px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
 .parts { display: grid; gap: 8px; }
 .part { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; padding: 8px 10px; border-radius: 8px; border: 1px dashed transparent; }
 .part.active-part { border-color: var(--line); background: var(--sunk); }
@@ -146,7 +149,8 @@ footer.version a { color: inherit; }
           <div id="files-msg" class="notice" hidden></div>
           <div class="video-pick">
             <div class="stack" style="gap:10px">
-              <label for="video">From the Incoming folder, newest first
+              <div class="folders" id="folders"></div>
+              <label for="video">Video, newest first
                 <select id="video"></select>
               </label>
               <div class="meta" id="video-meta"></div>
@@ -176,6 +180,13 @@ footer.version a { color: inherit; }
 
         <section class="panel" aria-labelledby="h-send">
           <h2 id="h-send" class="sr">Send</h2>
+          <div class="describe">
+            <label class="check"><input type="checkbox" id="describe" checked> Write a description with Gemini</label>
+            <label for="notes">Notes for the description (optional)
+              <input id="notes" maxlength="500" placeholder="Preacher's name, series title, anything Gemini should know">
+            </label>
+            <p class="hint" id="own-desc" hidden></p>
+          </div>
           <div class="row spread">
             <label for="height" style="max-width:240px">Resolution
               <select id="height">
@@ -334,16 +345,70 @@ async function loadFiles() {
     if (e.message === "locked") return;
     msg.className = "notice bad"; msg.textContent = e.message; return;
   }
-  const keep = $("#video").value;
-  $("#video").innerHTML = files.videos.length
-    ? files.videos.map((v) => `<option value="${v.id}">${esc(v.path)}</option>`).join("")
-    : `<option value="">No videos in Incoming yet</option>`;
-  if (keep && files.videos.some((v) => v.id === keep)) $("#video").value = keep;
+  const known = new Set(files.videos.map((v) => dirOf(v.path)));
+  if (folderPath && ![...known].some((d) => d === folderPath || d.startsWith(folderPath + "/"))) folderPath = "";
+  renderFolders();
   if (files.outputFolder) { $("#output-link").href = files.outputFolder; $("#output-link").hidden = false; }
   document.querySelectorAll(".output").forEach(fillGraphics);
   showVideo(); validate();
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+// ---------- folder pickers (Incoming/year/month-or-series/..., any depth)
+let folderPath = store.get("sp-folder");
+const dirOf = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+function subfoldersOf(path) {
+  const names = new Set();
+  for (const v of files.videos) {
+    const d = dirOf(v.path);
+    const rest = path ? (d.startsWith(path + "/") ? d.slice(path.length + 1) : null) : d;
+    if (rest) names.add(rest.split("/")[0]);
+  }
+  return sortFolders([...names]);
+}
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const monthIndex = (n) => { const i = MONTHS.findIndex((m) => n.toLowerCase().replace(/^\d+[\s._-]*/, "").startsWith(m.slice(0, 3))); return i; };
+// Years newest first, months newest first (December → January), everything else A–Z.
+function sortFolders(names) {
+  const rank = (n) => /^\d{4}$/.test(n) ? 0 : monthIndex(n) >= 0 ? 1 : 2;
+  return names.sort((a, b) => rank(a) - rank(b) ||
+    (rank(a) === 0 ? Number(b) - Number(a) : rank(a) === 1 ? monthIndex(b) - monthIndex(a) : a.localeCompare(b, undefined, { numeric: true })));
+}
+function renderFolders() {
+  const parts = folderPath ? folderPath.split("/") : [];
+  const box = $("#folders");
+  box.innerHTML = "";
+  for (let level = 0; level <= parts.length; level++) {
+    const base = parts.slice(0, level).join("/");
+    const subs = subfoldersOf(base);
+    if (!subs.length) break;
+    const id = `folder-${level}`;
+    const label = document.createElement("label");
+    label.htmlFor = id;
+    label.textContent = level === 0 ? "Folder in Incoming" : `Inside ${parts[level - 1]}`;
+    const sel = document.createElement("select");
+    sel.id = id;
+    sel.innerHTML = `<option value="">${level === 0 ? "All folders" : `All of ${esc(parts[level - 1])}`}</option>` +
+      subs.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    sel.value = parts[level] || "";
+    sel.addEventListener("change", () => {
+      folderPath = parts.slice(0, level).concat(sel.value ? [sel.value] : []).join("/");
+      store.set("sp-folder", folderPath);
+      renderFolders();
+    });
+    label.append(sel);
+    box.append(label);
+  }
+  renderVideos();
+}
+function renderVideos() {
+  const keep = $("#video").value;
+  const list = files.videos.filter((v) => !folderPath || dirOf(v.path) === folderPath || dirOf(v.path).startsWith(folderPath + "/"));
+  $("#video").innerHTML = list.length
+    ? list.map((v) => `<option value="${v.id}">${esc(folderPath ? v.path.slice(folderPath.length + 1) : v.path)}</option>`).join("")
+    : `<option value="">No videos here yet</option>`;
+  if (keep && list.some((v) => v.id === keep)) $("#video").value = keep;
+  showVideo(); autoGraphics(); validate();
+}
 const currentVideo = () => files.videos.find((v) => v.id === $("#video").value);
 const player = $("#player");
 let playerFor = "";
@@ -374,25 +439,61 @@ document.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("clic
 function showVideo() {
   const v = currentVideo(), t = $("#video-thumb");
   loadPlayer(v);
-  if (!v) { $("#video-meta").textContent = ""; t.className = "thumb"; t.textContent = "No video picked"; return; }
+  if (!v) { $("#video-meta").textContent = ""; t.className = "thumb"; t.textContent = "No video picked"; $("#own-desc").hidden = true; return; }
   $("#video-meta").innerHTML = [
     v.duration ? `Length ${fmt(v.duration)}` : "Length not known yet",
     size(v.size), v.height ? `${v.width}×${v.height}` : "", v.modified ? `Added ${ago(v.modified)}` : "",
   ].filter(Boolean).map((x) => `<span>${x}</span>`).join("");
+  const own = $("#own-desc");
+  own.hidden = !v.descriptionFile;
+  own.textContent = v.descriptionFile ? `Using your description file “${v.descriptionFile}” from Incoming, so Gemini is skipped.` : "";
+  $("#describe").disabled = !!v.descriptionFile;
   if (v.thumbnail) { t.className = "thumb"; t.innerHTML = `<img alt="Thumbnail ${esc(v.thumbnail.name)}" src="${img(v.thumbnail.id)}">`; }
   else { t.className = "thumb missing"; t.textContent = "No matching thumbnail. Add one to Thumbnails with the same name."; }
 }
-$("#video").addEventListener("change", () => { showVideo(); validate(); });
+$("#video").addEventListener("change", () => { showVideo(); autoGraphics(); validate(); });
 $("#refresh").addEventListener("click", loadFiles);
 
 // ---------- outputs
 function fillGraphics(card) {
   const sel = $(".o-graphic", card), keep = sel.value;
-  sel.innerHTML = `<option value="">None</option>` + files.graphics.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join("");
+  const groups = new Map();
+  for (const g of files.graphics) {
+    if (!groups.has(g.folder)) groups.set(g.folder, []);
+    groups.get(g.folder).push(g);
+  }
+  sel.innerHTML = `<option value="">None</option>` + [...groups].map(([folder, list]) =>
+    `<optgroup label="${esc(folder ? folder.replaceAll("/", " / ") : "Graphics (top level)")}">` +
+    list.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join("") + `</optgroup>`).join("");
   if (keep && files.graphics.some((g) => g.id === keep)) sel.value = keep;
-  else if (card.dataset.wantGraphic === "first" && files.graphics[0]) sel.value = files.graphics[0].id;
-  if (files.graphics.length) delete card.dataset.wantGraphic;   // keep the wish until the list has loaded
+  if (card.dataset.graphicAuto === "1") autoGraphic(card);
   showGraphic(card);
+}
+// Default graphic: the one in the folder that best matches the video's folders
+// (Graphics/2026/Romans for Incoming/2026/Romans), else a top-level or "Generic" one.
+function bestGraphic() {
+  const v = currentVideo();
+  if (!files.graphics.length) return null;
+  const vparts = v ? dirOf(v.path).toLowerCase().split("/").filter(Boolean) : [];
+  let best = null, bestScore = -1;
+  for (const g of files.graphics) {
+    const gparts = g.folder.toLowerCase().split("/").filter(Boolean);
+    let depth = 0;
+    while (depth < gparts.length && gparts[depth] === vparts[depth]) depth++;
+    // On the video's folder path: deeper match wins (top level = 0). A "Generic"/"Default" folder beats top level.
+    const score = depth === gparts.length ? depth : /generic|default/i.test(g.folder) ? 0.5 : -1;
+    if (score > bestScore) { best = g; bestScore = score; }
+  }
+  return best || files.graphics[0];
+}
+function autoGraphic(card) {
+  const g = bestGraphic();
+  if (!g) return;
+  $(".o-graphic", card).value = g.id;
+  showGraphic(card);
+}
+function autoGraphics() {
+  document.querySelectorAll(".output").forEach((c) => { if (c.dataset.graphicAuto === "1") autoGraphic(c); });
 }
 function showGraphic(card) {
   const id = $(".o-graphic", card).value, p = $(".o-gprev", card);
@@ -404,14 +505,14 @@ function addOutput(preset = {}) {
   const n = document.querySelectorAll(".output").length + 1;
   $(".o-name", card).value = preset.name || (n === 1 ? "YouTube" : `Output ${n}`);
   $(".o-podcast", card).checked = !!preset.podcast;
-  if (preset.graphic) card.dataset.wantGraphic = "first";
+  card.dataset.graphicAuto = preset.graphic ? "1" : "0";
   card.querySelectorAll("input,select").forEach((el, i) => { el.id = `o${n}-${i}`; });
   card.dataset.n = n;
   $(".o-addpart", card).addEventListener("click", () => { $(".p-in", addPart(card)).focus(); });
   card.addEventListener("focusin", (e) => activate(card, e.target.closest(".part")));
   card.addEventListener("pointerdown", (e) => activate(card, e.target.closest(".part")));
   $(".o-remove", card).addEventListener("click", () => { card.remove(); activate(document.querySelector(".output")); validate(); });
-  $(".o-graphic", card).addEventListener("change", () => { showGraphic(card); validate(); });
+  $(".o-graphic", card).addEventListener("change", () => { card.dataset.graphicAuto = "0"; showGraphic(card); validate(); });
   card.addEventListener("input", validate);
   $("#outputs").append(card);
   addPart(card);
@@ -506,7 +607,7 @@ function readOutputs() {
     }
     $(".o-length", card).textContent = clipKnown && rows.length
       ? `Total ${fmt(clip)}${g ? ` + ${secs || 0}s graphic` : ""}` : "";
-    const out = { name, endGraphic: g ? { file: g.name, seconds: secs, crossfade: fade } : null, podcast: $(".o-podcast", card).checked };
+    const out = { name, endGraphic: g ? { file: g.path, seconds: secs, crossfade: fade } : null, podcast: $(".o-podcast", card).checked };
     if (segments.length === 1) Object.assign(out, segments[0]); else out.segments = segments;
     outs.push(out);
   });
@@ -528,7 +629,8 @@ $("#send").addEventListener("click", async () => {
   btn.disabled = true; btn.textContent = "Sending…";
   try {
     await api("/api/jobs", { method: "POST", body: JSON.stringify({
-      job: { source: v.path, outputs: outs }, height: $("#height").value, label: `Render ${v.path}`,
+      job: { source: v.path, outputs: outs, describe: { enabled: v.descriptionFile ? true : $("#describe").checked, notes: $("#notes").value.trim() } },
+      height: $("#height").value, label: `Render ${v.path}`,
     }) });
     msg.hidden = false; msg.className = "notice ok";
     msg.textContent = "Sent. It appears under Recent runs in a few seconds; finished files go to the Output folder.";
