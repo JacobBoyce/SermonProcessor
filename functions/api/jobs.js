@@ -26,8 +26,10 @@ async function github(env, path, init = {}) {
 }
 
 export const onRequestGet = wrap(async ({ env }) => {
-  const d = await github(env, `/actions/workflows/${WORKFLOW}/runs?per_page=12&event=workflow_dispatch`);
+  const d = await github(env, `/actions/workflows/${WORKFLOW}/runs?per_page=10&event=workflow_dispatch`);
+  const repo = env.GITHUB_REPO || "JacobBoyce/SermonProcessor";
   return json({
+    all: `https://github.com/${repo}/actions/workflows/${WORKFLOW}`,
     runs: (d.workflow_runs || []).map((r) => ({
       id: r.id,
       label: r.display_title,

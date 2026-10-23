@@ -79,6 +79,12 @@ button.link:hover { color: var(--bad); }
 .errors li::before { content: "• "; }
 
 .runs { display: grid; gap: 8px; }
+/* Recent runs follows you down the page on wide screens; its list scrolls if it's taller than the window. */
+@media (min-width: 901px) {
+  aside.panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 100px - env(safe-area-inset-top, 0px)); grid-template-rows: auto minmax(0, 1fr) auto; }
+  aside.panel .runs { overflow-y: auto; min-height: 0; padding-right: 2px; }
+}
+.runs-foot { font-size: .8rem; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .run { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .run .title { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
 .run .when { font-size: .78rem; color: var(--muted); grid-column: 1; }
@@ -214,6 +220,7 @@ footer.version a { color: inherit; }
       <aside class="panel" aria-labelledby="h-runs">
         <div class="row spread"><h2 id="h-runs">Recent runs</h2><button class="link" type="button" id="runs-refresh">Refresh</button></div>
         <div id="runs" class="runs"><p class="empty">Loading…</p></div>
+        <div class="runs-foot"><span>The 10 most recent runs</span><a id="runs-all" href="#" target="_blank" rel="noopener" hidden>See all on GitHub</a></div>
       </aside>
     </div>
   </div>
@@ -665,6 +672,7 @@ async function loadRuns() {
   try { data = await api("/api/jobs"); }
   catch (e) { if (e.message !== "locked") $("#runs").innerHTML = `<p class="notice bad">${esc(e.message)}</p>`; return; }
   const runs = data.runs || [];
+  if (data.all) { $("#runs-all").href = data.all; $("#runs-all").hidden = false; }
   $("#runs").innerHTML = runs.length ? runs.map((r) => {
     const key = r.status === "completed" ? r.conclusion : r.status;
     return `<div class="run"><span class="title">${esc(r.label)}</span><span class="chip ${key}">${STATUS[key] || key}</span>
