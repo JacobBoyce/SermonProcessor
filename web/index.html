@@ -116,7 +116,20 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .tfield input { width: calc(10ch + 24px); flex: none; }
 .folders { display: flex; gap: 10px; flex-wrap: wrap; }
 .folders label { flex: 1 1 160px; }
-.describe { display: grid; gap: 10px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.sendbar { display: grid; gap: 10px; justify-items: end; }
+.sendbar .errors, .sendbar .notice { justify-self: stretch; }
+.toasts { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: calc(max(8px, env(safe-area-inset-bottom)) + 34px);
+  display: grid; gap: 10px; width: min(360px, calc(100vw - 32px)); z-index: 20; }
+.toast { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: 10px;
+  padding: 12px 14px; box-shadow: 0 8px 24px rgb(0 0 0 / .16); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+.toast.bad { border-left-color: var(--bad); }
+.toast strong { font-size: .92rem; overflow-wrap: anywhere; }
+.toast p { margin: 0; grid-column: 1; font-size: .85rem; color: var(--muted); }
+.toast .links { grid-column: 1 / -1; display: flex; gap: 14px; font-size: .85rem; }
+.toast .x { grid-row: 1; grid-column: 2; border: 0; background: none; padding: 0 4px; font-size: 1.2rem; line-height: 1; color: var(--muted); }
+.toast .x:hover { color: var(--fg); }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: toast-in .25s ease-out; } }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
 .parts { display: grid; gap: 8px; }
 .part { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; padding: 8px 10px; border-radius: 8px; border: 1px dashed transparent; }
 .part.active-part { border-color: var(--line); background: var(--sunk); }
@@ -166,6 +179,12 @@ footer.version a { color: inherit; }
                 <select id="video"></select>
               </label>
               <div class="meta" id="video-meta"></div>
+              <label for="height" style="max-width:280px">Resolution
+                <select id="height">
+                  <option value="1080">1080p (faster)</option>
+                  <option value="source">Same as the video (4K stays 4K)</option>
+                </select>
+              </label>
             </div>
             <div class="thumb" id="video-thumb">No video picked</div>
           </div>
@@ -190,33 +209,23 @@ footer.version a { color: inherit; }
           <div id="outputs" class="stack" style="gap:12px"></div>
         </section>
 
-        <section class="panel" aria-labelledby="h-send">
-          <h2 id="h-send" class="sr">Send</h2>
-          <div class="describe">
-            <label class="check"><input type="checkbox" id="describe" checked> Write a description with Gemini</label>
-            <div class="stack" style="gap:6px">
-              <div class="row spread">
-                <label for="instructions">Instructions for Gemini</label>
-                <label class="check" style="font-size:.85rem"><input type="checkbox" id="custom-instr"> Use custom instructions</label>
-              </div>
-              <textarea id="instructions" rows="3" readonly maxlength="2000"></textarea>
-              <p class="hint" id="instr-hint">These are the default instructions (prompts/instructions.txt on GitHub). Tick “Use custom instructions” to change them for this sermon only.</p>
+        <section class="panel" aria-labelledby="h-desc">
+          <h2 id="h-desc">Description</h2>
+          <label class="check"><input type="checkbox" id="describe" checked> Write a description with Gemini</label>
+          <div class="stack" style="gap:6px">
+            <div class="row spread">
+              <label for="instructions">Instructions for Gemini</label>
+              <label class="check" style="font-size:.85rem"><input type="checkbox" id="custom-instr"> Use custom instructions</label>
             </div>
-            <label for="notes">Notes about this sermon (optional)
-              <input id="notes" maxlength="500" placeholder="Sermon series name, preacher, anything Gemini should know">
-            </label>
-            <p class="hint" id="own-desc" hidden></p>
+            <textarea id="instructions" rows="3" readonly maxlength="2000"></textarea>
+            <p class="hint" id="instr-hint">These are the default instructions (prompts/instructions.txt on GitHub). Tick “Use custom instructions” to change them for this sermon only.</p>
           </div>
-          <div class="row spread">
-            <label for="height" style="max-width:240px">Resolution
-              <select id="height">
-                <option value="1080">1080p (faster)</option>
-                <option value="source">Same as the video (4K stays 4K)</option>
-              </select>
-            </label>
-            <button class="primary" type="button" id="send">Send to render</button>
-          </div>
+          <p class="hint" id="own-desc" hidden></p>
+        </section>
+
+        <section class="sendbar" aria-label="Send">
           <ul class="errors" id="errors"></ul>
+          <button class="primary" type="button" id="send">Send to render</button>
           <div id="send-msg" class="notice" hidden></div>
         </section>
       </div>
@@ -230,6 +239,7 @@ footer.version a { color: inherit; }
   </div>
 </div>
 
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <footer class="version" id="version">Version …</footer>
 
 <template id="part-tpl">
@@ -653,12 +663,13 @@ $("#send").addEventListener("click", async () => {
   btn.disabled = true; btn.textContent = "Sending…";
   try {
     await api("/api/jobs", { method: "POST", body: JSON.stringify({
-      job: { source: v.path, outputs: outs, describe: { enabled: v.descriptionFile ? true : $("#describe").checked, notes: $("#notes").value.trim(),
+      job: { source: v.path, outputs: outs, describe: { enabled: v.descriptionFile ? true : $("#describe").checked,
         instructions: $("#custom-instr").checked ? $("#instructions").value.trim() : "" } },
       height: $("#height").value, label: `Render ${v.path}`,
     }) });
     msg.hidden = false; msg.className = "notice ok";
-    msg.textContent = "Sent. It appears under Recent runs in a few seconds; finished files go to the Output folder.";
+    msg.textContent = "Sent. It appears under Recent runs in a few seconds, and a notice pops up here when it's finished.";
+    watch.pending.push({ label: `Render ${v.path}`, at: Date.now() }); saveWatch();
     setTimeout(loadRuns, 4000);
   } catch (e) {
     if (e.message === "locked") return;
@@ -687,11 +698,49 @@ function progressHtml(r) {
   return `<div class="prog">${esc(text)}</div>
     <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progress"><span style="width:${Math.max(pct, 2)}%"></span></div>`;
 }
+// ---------- finished notices: stay until closed (an auto-close setting can come later)
+const watch = (() => { try { return JSON.parse(localStorage.getItem("sp-watch")) || {}; } catch { return {}; } })();
+watch.ids = watch.ids || {};          // run id -> label, for runs seen queued or running
+watch.done = watch.done || [];        // run ids already announced
+watch.pending = watch.pending || [];  // jobs sent from this browser that GitHub hasn't listed yet
+function saveWatch() { store.set("sp-watch", JSON.stringify(watch)); }
+function notice({ title, text, ok, links = [], autoCloseMs = null }) {
+  const el = document.createElement("div");
+  el.className = `toast${ok ? "" : " bad"}`;
+  el.innerHTML = `<strong></strong><button type="button" class="x" aria-label="Close">×</button><p></p>
+    <div class="links">${links.map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener">${esc(l.text)}</a>`).join("")}</div>`;
+  $("strong", el).textContent = title;
+  $("p", el).textContent = text;
+  $(".x", el).addEventListener("click", () => el.remove());
+  $("#toasts").append(el);
+  if (autoCloseMs) setTimeout(() => el.remove(), autoCloseMs);
+}
+function checkFinished(runs) {
+  for (const r of runs) {
+    const id = String(r.id);
+    if (watch.done.includes(id)) continue;
+    const i = watch.pending.findIndex((p) => p.label === r.label && new Date(r.created).getTime() >= p.at - 120000);
+    if (i >= 0) { watch.pending.splice(i, 1); watch.ids[id] = r.label; }
+    if (r.status !== "completed") { watch.ids[id] = r.label; continue; }
+    if (!(id in watch.ids)) continue;
+    const ok = r.conclusion === "success";
+    const links = [{ text: "Details", href: r.url }];
+    if (ok && files.outputFolder) links.unshift({ text: "Open Output folder", href: files.outputFolder });
+    notice({ ok, links, title: `${ok ? "Finished" : "Failed"}: ${r.label.replace(/^Render /, "")}`,
+      text: ok ? "The videos are in the Output folder." : (r.conclusion === "cancelled" ? "The run was cancelled." : "Open Details to see what went wrong.") });
+    delete watch.ids[id];
+    watch.done.push(id);
+  }
+  watch.done = watch.done.slice(-50);
+  watch.pending = watch.pending.filter((p) => Date.now() - p.at < 3600000);
+  saveWatch();
+}
 async function loadRuns() {
   let data;
   try { data = await api("/api/jobs"); }
   catch (e) { if (e.message !== "locked") $("#runs").innerHTML = `<p class="notice bad">${esc(e.message)}</p>`; return; }
   const runs = data.runs || [];
+  checkFinished(runs);
   if (data.all) { $("#runs-all").href = data.all; $("#runs-all").hidden = false; }
   $("#runs").innerHTML = runs.length ? runs.map((r) => {
     const key = r.status === "completed" ? r.conclusion : r.status;
