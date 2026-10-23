@@ -29,11 +29,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore cached FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: ~/ffmpeg-bin
+          key: ffmpeg-static-v1-${{ runner.os }}
+
       - name: Install FFmpeg
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg > /dev/null
-          ffmpeg -version | head -1
+        timeout-minutes: 10
+        run: bash scripts/install-ffmpeg.sh
 
       # The runner's /mnt disk has far more free space than the default work
       # folder, which matters for 10 GB 4K sources.

@@ -42,13 +42,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools
-        run: |
-          pip install --quiet requests
-          if [ "${{ inputs.action }}" = "render" ]; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq ffmpeg > /dev/null
-          fi
+      - name: Install Python packages
+        timeout-minutes: 5
+        run: pip install --quiet --retries 3 --timeout 30 requests
+
+      # FFmpeg comes from a cached copy or a ready-made GitHub download, not Ubuntu's
+      # package mirrors (which can hang for hours). A stall now fails within 10 minutes.
+      - name: Restore cached FFmpeg
+        if: inputs.action == 'render'
+        uses: actions/cache@v4
+        with:
+          path: ~/ffmpeg-bin
+          key: ffmpeg-static-v1-${{ runner.os }}
+
+      - name: Install FFmpeg
+        if: inputs.action == 'render'
+        timeout-minutes: 10
+        run: bash scripts/install-ffmpeg.sh
 
       # /mnt has far more free space than the default work folder (10 GB sources).
       - name: Prepare work folder
