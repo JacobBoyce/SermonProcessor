@@ -29,6 +29,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -98,6 +99,52 @@ def find_thumbnail(drive, thumbs_id: str, rel_video: str):
     return find_matching(drive, thumbs_id, rel_video, IMAGE_EXT)
 
 
+class Progress:
+    """Overall progress for the web app, saved as private labels on the source video.
+
+    Stages and their share of the bar: download 6%, render 84%, upload 6%,
+    description 4%. Saved at most every 15 s (and on each stage change). Any
+    problem saving progress is ignored: it must never stop a render.
+    """
+    STAGES = {"download": (0.00, 0.06), "render": (0.06, 0.84), "upload": (0.90, 0.06), "describe": (0.96, 0.04)}
+    EVERY = 15.0
+
+    def __init__(self, drive, file_id: str):
+        self.drive, self.file_id = drive, file_id
+        self.run = os.environ.get("GITHUB_RUN_ID", "local")
+        self.last_write, self.last_stage = 0.0, ""
+        self.stage_started = time.monotonic()
+        self.stage_rate_bytes = 0.0
+
+    def update(self, stage: str, frac: float, label: str, eta: float | None = None, force: bool = False) -> None:
+        now = time.monotonic()
+        if stage != self.last_stage:
+            self.last_stage, self.stage_started, force = stage, now, True
+        if not force and now - self.last_write < self.EVERY:
+            return
+        start, share = self.STAGES.get(stage, (1.0, 0.0))
+        pct = min(100.0, 100 * (start + share * max(0.0, min(frac, 1.0))))
+        self._save({"sp_run": self.run, "sp_stage": label, "sp_pct": f"{pct:.0f}",
+                    "sp_eta": "" if eta is None else f"{max(eta, 0):.0f}", "sp_at": f"{time.time():.0f}"})
+        self.last_write = now
+
+    def render(self, label: str, frac: float) -> None:
+        elapsed = time.monotonic() - self.stage_started
+        # Remaining render time from the speed so far, plus ~3 min for uploads and the description.
+        eta = elapsed / frac * (1 - frac) + 180 if frac > 0.02 else None
+        self.update("render", frac, f"Rendering {label}", eta)
+
+    def finish(self, ok: bool, note: str = "") -> None:
+        self._save({"sp_run": self.run, "sp_stage": note or ("Done" if ok else "Failed"),
+                    "sp_pct": "100" if ok else "", "sp_eta": "0" if ok else "", "sp_at": f"{time.time():.0f}"})
+
+    def _save(self, props: dict) -> None:
+        try:
+            self.drive.set_properties(self.file_id, props)
+        except Exception as exc:   # noqa: BLE001 - progress is best-effort
+            print(f"    (couldn't save progress: {exc})")
+
+
 def mb(n: int) -> str:
     return f"{n / 1048576:,.0f} MB" if n < 1 << 30 else f"{n / (1 << 30):,.1f} GB"
 
@@ -136,7 +183,29 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
     if src.size and src.size * 2.2 > free:
         print("  Warning: disk space is tight for this source and its renders.")
 
-    local_src = drive.download(src, work / "source" / src.name)
+    prog = Progress(drive, src.id)
+    prog.update("download", 0, "Downloading the video", force=True)
+    try:
+        written, out_dir, local_job = _process(drive, folders, rel_source, src, job, work, height, prog)
+        prog.update("describe", 0, "Writing the description", 60, force=True)
+        write_description(drive, folders, rel_source, local_job, written, out_dir, work)
+    except BaseException:
+        prog.finish(False)
+        raise
+    prog.finish(True)
+
+
+def _process(drive, folders: dict, rel_source: str, src, job: dict, work: Path, height: str | None, prog):
+    """Download, render and upload. Returns (written files, output folder, local job)."""
+    t0 = time.monotonic()
+
+    def dl(done, total):
+        rate = done / max(time.monotonic() - t0, 0.1)
+        prog.update("download", done / total if total else 0,
+                    f"Downloading the video ({done * 100 // max(total, 1)}%)",
+                    (total - done) / rate if rate and total else None)
+
+    local_src = drive.download(src, work / "source" / src.name, on_bytes=dl)
 
     local_job = dict(job)
     local_job["source"] = str(local_src)
@@ -174,20 +243,26 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
     job_path = work / "job.json"
     job_path.write_text(json.dumps(local_job, indent=2))
     out_dir = work / "output"
-    written = render.render(job_path, out_dir)
+    written = render.render(job_path, out_dir, on_progress=prog.render)
 
     local_src.unlink(missing_ok=True)   # free disk before uploading
     summary(f"## Rendered `{rel_source}`\n\n| File | Size | Drive |\n| --- | --- | --- |")
     print("\nUploading to Output:")
+    total_up = sum(f.stat().st_size for f in written) or 1
+    sent_before, t_up = 0, time.monotonic()
     for f in written:
+        def up(done, _total, base=sent_before, name=f.name):
+            now_sent = base + done
+            rate = now_sent / max(time.monotonic() - t_up, 0.1)
+            prog.update("upload", now_sent / total_up, f"Uploading {name}", (total_up - now_sent) / rate + 60 if rate else None)
         rel_dir = f.parent.relative_to(out_dir).as_posix()
         folder_id = drive.ensure_folder(folders["Output"].id, "" if rel_dir == "." else rel_dir)
-        file_id = drive.upload(f, folder_id)
+        file_id = drive.upload(f, folder_id, on_bytes=up)
+        sent_before += f.stat().st_size
         where = f"Output/{rel_dir}/{f.name}" if rel_dir != "." else f"Output/{f.name}"
         print(f"  {where}")
         summary(f"| {where} | {mb(f.stat().st_size)} | [open](https://drive.google.com/file/d/{file_id}/view) |")
-
-    write_description(drive, folders, rel_source, local_job, written, out_dir, work)
+    return written, out_dir, local_job
 
 
 def write_description(drive, folders: dict, rel_source: str, job: dict, written: list[Path],

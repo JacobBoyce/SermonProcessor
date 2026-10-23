@@ -324,8 +324,11 @@ def build_podcast_cmd(src: Path, info: SourceInfo, out: Output, dest: Path, titl
     return cmd, out.clip
 
 
-def run_ffmpeg(cmd: list[str], total: float, label: str) -> None:
-    """Run FFmpeg, printing progress about every 10% so the Actions log shows it moving."""
+def run_ffmpeg(cmd: list[str], total: float, label: str, on_time=None) -> None:
+    """Run FFmpeg, printing progress about every 10% so the Actions log shows it moving.
+
+    on_time(seconds_done) is called as FFmpeg reports progress (about twice a second).
+    """
     started = time.monotonic()
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     next_mark = 10
@@ -336,6 +339,8 @@ def run_ffmpeg(cmd: list[str], total: float, label: str) -> None:
                 done = int(line.split("=", 1)[1]) / 1_000_000
             except ValueError:
                 continue
+            if on_time:
+                on_time(min(done, total))
             pct = min(100, int(done / total * 100))
             if pct >= next_mark:
                 elapsed = time.monotonic() - started
@@ -349,7 +354,8 @@ def run_ffmpeg(cmd: list[str], total: float, label: str) -> None:
 
 # ---------------------------------------------------------------- main
 
-def render(job_path: Path, out_dir: Path) -> list[Path]:
+def render(job_path: Path, out_dir: Path, on_progress=None) -> list[Path]:
+    """on_progress(label, fraction) reports how far through all outputs the render is (0..1)."""
     try:
         job = json.loads(job_path.read_text())
     except json.JSONDecodeError as exc:
@@ -381,6 +387,21 @@ def render(job_path: Path, out_dir: Path) -> list[Path]:
     label = str(job.get("prefix") or date).strip()
     prefix = f"{label} " if label else ""
 
+    # Weigh each piece of work by the seconds it encodes; audio-only podcasts are ~20x faster.
+    PODCAST_WEIGHT = 0.05
+    weights = []
+    for out in outputs:
+        weights.append(out.clip + (out.graphic.seconds if out.graphic else 0))
+        if out.podcast:
+            weights.append(out.clip * PODCAST_WEIGHT)
+    total_weight = sum(weights) or 1.0
+    done_weight = 0.0
+
+    def reporter(label: str, weight: float, total_secs: float):
+        if not on_progress:
+            return None
+        return lambda secs: on_progress(label, (done_weight + weight * secs / max(total_secs, 0.001)) / total_weight)
+
     written: list[Path] = []
     for out in outputs:
         dest = dest_dir / f"{prefix}{out.name}.mp4"
@@ -389,7 +410,9 @@ def render(job_path: Path, out_dir: Path) -> list[Path]:
         spans = " + ".join(f"{fmt_time(a)}→{fmt_time(b)}" for a, b in out.segments)
         print(f"\n[{out.name}] {spans} ({fmt_time(out.clip)}){extra}, {size[0]}x{size[1]}")
         cmd, total = build_video_cmd(src, info, out, dest, size, crf, preset)
-        run_ffmpeg(cmd, total, out.name)
+        w = out.clip + (out.graphic.seconds if out.graphic else 0)
+        run_ffmpeg(cmd, total, out.name, reporter(out.name, w, total))
+        done_weight += w
         written.append(dest)
         print(f"    saved {dest}")
 
@@ -397,7 +420,9 @@ def render(job_path: Path, out_dir: Path) -> list[Path]:
             mp3 = dest_dir / f"{prefix}{out.name}.mp3"
             title = str(job.get("title") or f"{prefix}{out.name}").strip()
             cmd, total = build_podcast_cmd(src, info, out, mp3, title, date)
-            run_ffmpeg(cmd, total, f"{out.name} podcast")
+            w = out.clip * PODCAST_WEIGHT
+            run_ffmpeg(cmd, total, f"{out.name} podcast", reporter(f"{out.name} podcast", w, total))
+            done_weight += w
             written.append(mp3)
             print(f"    saved {mp3}")
     return written

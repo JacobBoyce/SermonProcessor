@@ -88,7 +88,11 @@ button.link:hover { color: var(--bad); }
 .run { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .run .title { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
 .run .when { font-size: .78rem; color: var(--muted); grid-column: 1; }
-.run a { font-size: .8rem; grid-column: 2; grid-row: 2; justify-self: end; }
+.run a { font-size: .8rem; grid-column: 2; justify-self: end; }
+.bar { grid-column: 1 / -1; height: 6px; border-radius: 99px; background: var(--sunk); overflow: hidden; margin-top: 4px; }
+.bar span { display: block; height: 100%; background: var(--run); border-radius: 99px; transition: width .6s ease; }
+.run .prog { grid-column: 1 / -1; font-size: .78rem; color: var(--muted); font-family: var(--mono); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
 .chip { font-family: var(--mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 99px;
   border: 1px solid currentColor; align-self: start; white-space: nowrap; }
 .chip.queued, .chip.in_progress, .chip.waiting, .chip.pending, .chip.requested { color: var(--run); }
@@ -667,6 +671,22 @@ $("#send").addEventListener("click", async () => {
 // ---------- runs
 const STATUS = { queued: "Queued", in_progress: "Rendering", waiting: "Waiting", pending: "Queued", requested: "Queued",
   success: "Done", failure: "Failed", cancelled: "Cancelled", timed_out: "Timed out" };
+function eta(sec) {
+  if (sec == null) return "";
+  if (sec < 90) return "about a minute left";
+  const m = Math.round(sec / 60);
+  return m < 60 ? `about ${m} min left` : `about ${Math.floor(m / 60)} h ${m % 60} min left`;
+}
+function progressHtml(r) {
+  if (r.status === "completed") return "";
+  const p = r.progress;
+  if (!p) return r.status === "in_progress" ? `<div class="prog">Starting up…</div><div class="bar" aria-hidden="true"><span style="width:2%"></span></div>` : "";
+  const pct = p.pct ?? 0;
+  const stale = p.at && Date.now() - p.at > 180000 ? ` · last update ${ago(new Date(p.at).toISOString())}` : "";
+  const text = [p.stage, p.pct != null ? `${pct}%` : "", eta(p.eta)].filter(Boolean).join(" · ") + stale;
+  return `<div class="prog">${esc(text)}</div>
+    <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progress"><span style="width:${Math.max(pct, 2)}%"></span></div>`;
+}
 async function loadRuns() {
   let data;
   try { data = await api("/api/jobs"); }
@@ -676,6 +696,7 @@ async function loadRuns() {
   $("#runs").innerHTML = runs.length ? runs.map((r) => {
     const key = r.status === "completed" ? r.conclusion : r.status;
     return `<div class="run"><span class="title">${esc(r.label)}</span><span class="chip ${key}">${STATUS[key] || key}</span>
+      ${progressHtml(r)}
       <span class="when">${ago(r.created)}</span><a href="${r.url}" target="_blank" rel="noopener">Details</a></div>`;
   }).join("") : `<p class="empty">No runs yet. Sent jobs show up here.</p>`;
   const busy = runs.some((r) => r.status !== "completed");

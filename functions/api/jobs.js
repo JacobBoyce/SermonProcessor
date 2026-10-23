@@ -1,5 +1,5 @@
 // GET /api/jobs: recent render runs.  POST /api/jobs: start a render on GitHub.
-import { AppError } from "../../lib/google.js";
+import { AppError, drive } from "../../lib/google.js";
 import { json, wrap } from "../../lib/http.js";
 
 const WORKFLOW = "process.yml";
@@ -25,12 +25,36 @@ async function github(env, path, init = {}) {
   return r.status === 204 ? null : r.json();
 }
 
+// Progress for a run in flight: the worker saves it as private labels (appProperties)
+// on the source video in Drive about every 15 seconds.
+async function progressFor(env, runId) {
+  try {
+    const d = await drive(env, "/files", {
+      q: `appProperties has { key='sp_run' and value='${runId}' } and trashed = false`,
+      fields: "files(appProperties)", includeItemsFromAllDrives: "true", pageSize: "1",
+    });
+    const p = d.files?.[0]?.appProperties;
+    if (!p) return null;
+    return {
+      stage: p.sp_stage || "",
+      pct: p.sp_pct === "" || p.sp_pct == null ? null : Number(p.sp_pct),
+      eta: p.sp_eta === "" || p.sp_eta == null ? null : Number(p.sp_eta),
+      at: p.sp_at ? Number(p.sp_at) * 1000 : null,
+    };
+  } catch {
+    return null;   // progress is extra; never break the run list
+  }
+}
+
 export const onRequestGet = wrap(async ({ env }) => {
   const d = await github(env, `/actions/workflows/${WORKFLOW}/runs?per_page=10&event=workflow_dispatch`);
   const repo = env.GITHUB_REPO || "JacobBoyce/SermonProcessor";
+  const runs = d.workflow_runs || [];
+  const live = await Promise.all(runs.map((r) => (r.status === "completed" ? null : progressFor(env, r.id))));
   return json({
     all: `https://github.com/${repo}/actions/workflows/${WORKFLOW}`,
-    runs: (d.workflow_runs || []).map((r) => ({
+    runs: runs.map((r, i) => ({
+      progress: live[i],
       id: r.id,
       label: r.display_title,
       status: r.status,

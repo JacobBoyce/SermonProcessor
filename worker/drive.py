@@ -187,7 +187,7 @@ class Drive:
 
     # ------------------------------------------------------------ transfer
 
-    def download(self, f: DriveFile, dest: Path, progress=print) -> Path:
+    def download(self, f: DriveFile, dest: Path, progress=print, on_bytes=None) -> Path:
         """Stream a file to disk, resuming from where it stopped if the connection drops."""
         dest.parent.mkdir(parents=True, exist_ok=True)
         have = 0
@@ -202,6 +202,8 @@ class Drive:
                     for chunk in r.iter_content(READ_CHUNK):
                         out.write(chunk)
                         have += len(chunk)
+                        if on_bytes:
+                            on_bytes(have, f.size)
                         if f.size:
                             pct = have * 100 // f.size
                             if pct >= next_mark:
@@ -217,7 +219,7 @@ class Drive:
             time.sleep(2 ** attempt)
         raise DriveError(f"Download of {f.name} stopped at {have} of {f.size} bytes")
 
-    def upload(self, src: Path, folder_id: str, progress=print) -> str:
+    def upload(self, src: Path, folder_id: str, progress=print, on_bytes=None) -> str:
         """Upload in chunks; replaces a same-name file in the folder instead of making a duplicate."""
         size = src.stat().st_size
         mime = mimetypes.guess_type(src.name)[0] or "application/octet-stream"
@@ -257,7 +259,14 @@ class Drive:
                     return r.json()["id"]
                 rng = r.headers.get("Range")          # e.g. "bytes=0-67108863"
                 sent = int(rng.split("-")[1]) + 1 if rng else 0
+                if on_bytes:
+                    on_bytes(sent, size)
                 if size and sent * 100 // size >= next_mark:
                     progress(f"    upload {src.name}: {sent * 100 // size}%")
                     next_mark = sent * 100 // size // 25 * 25 + 25
         raise DriveError(f"Upload of {src.name} didn't finish")
+
+    def set_properties(self, file_id: str, props: dict) -> None:
+        """Save small private labels on a file (Drive appProperties; not shown in Drive)."""
+        self._request("PATCH", f"{API}/files/{file_id}", params={**COMMON, "fields": "id"},
+                      json={"appProperties": {k: str(v)[:100] for k, v in props.items()}}, timeout=30)
