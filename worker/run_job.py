@@ -216,7 +216,8 @@ def write_description(drive, folders: dict, rel_source: str, job: dict, written:
             text = local.read_text(errors="replace").strip()
             title, body, data, source = str(job.get("title") or label), describe.clean(text)[:describe.YOUTUBE_LIMIT], None, own.name
         else:
-            title, body, data = describe.describe(main, work, str(opts.get("notes") or ""))
+            title, body, data = describe.describe(main, work, str(opts.get("notes") or ""),
+                                                  str(opts.get("instructions") or ""))
             source = os.environ.get("GEMINI_MODEL", "").strip() or describe.DEFAULT_MODEL
         txt = main.parent / f"{base}.txt"
         txt.write_text(f"{title}\n\n{body}\n" if title else f"{body}\n")

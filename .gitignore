@@ -7,3 +7,4 @@ __pycache__/
 .wrangler/
 node_modules/
 web/version.json
+web/instructions.txt

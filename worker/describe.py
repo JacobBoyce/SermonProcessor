@@ -23,6 +23,9 @@ import requests
 BASE = "https://generativelanguage.googleapis.com"
 DEFAULT_MODEL = "gemini-3.8-flash"
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "description.md"
+# The church's default instructions (also shown, greyed out, in the web app).
+INSTRUCTIONS_FILE = Path(__file__).resolve().parent.parent / "prompts" / "instructions.txt"
+MAX_INSTRUCTIONS = 2000
 YOUTUBE_LIMIT = 5000
 
 # Gemini returns this shape. Edit prompts/description.md to change what goes in it.
@@ -88,9 +91,12 @@ def delete(info: dict, key: str) -> None:
         pass   # Gemini deletes uploads after 48 hours anyway
 
 
-def build_prompt(notes: str) -> str:
+def build_prompt(notes: str, instructions: str = "") -> str:
+    """instructions: custom text from the web app; empty means the default file."""
     text = PROMPT_FILE.read_text()
     notes = notes.strip()
+    instructions = (instructions.strip() or INSTRUCTIONS_FILE.read_text().strip())[:MAX_INSTRUCTIONS]
+    text = text.replace("{{instructions}}", instructions)
     example = os.environ.get("DESCRIPTION_EXAMPLE", "").strip()
     text = text.replace("{{notes}}", f"Notes from the church about this recording: {notes}" if notes else "")
     text = text.replace("{{example}}", f"Match the style of this past description:\n{example}" if example else "")
@@ -145,7 +151,7 @@ def compose(data: dict) -> str:
     return text[:YOUTUBE_LIMIT].rstrip()
 
 
-def describe(media: Path, work: Path, notes: str = "") -> tuple[str, str, dict]:
+def describe(media: Path, work: Path, notes: str = "", instructions: str = "") -> tuple[str, str, dict]:
     """Return (title, description text, raw JSON) for a rendered output."""
     key = _key()
     model = os.environ.get("GEMINI_MODEL", "").strip() or DEFAULT_MODEL
@@ -153,7 +159,7 @@ def describe(media: Path, work: Path, notes: str = "") -> tuple[str, str, dict]:
     print(f"  Sending {audio.stat().st_size / 1048576:.1f} MB of audio to {model}")
     info = upload(audio, key)
     try:
-        data = ask(info, build_prompt(notes), key, model)
+        data = ask(info, build_prompt(notes, instructions), key, model)
     finally:
         delete(info, key)
         audio.unlink(missing_ok=True)

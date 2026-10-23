@@ -9,3 +9,6 @@ REPO="${GITHUB_REPO:-JacobBoyce/SermonProcessor}"
 BUILT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '{"sha":"%s","branch":"%s","repo":"%s","built":"%s"}\n' "$SHA" "$BRANCH" "$REPO" "$BUILT" > web/version.json
 echo "Stamped web/version.json: $SHA ($BRANCH) at $BUILT"
+# The web app shows the default Gemini instructions (greyed out) from this copy.
+cp prompts/instructions.txt web/instructions.txt
+echo "Copied prompts/instructions.txt to web/"
