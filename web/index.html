@@ -142,6 +142,10 @@ footer.version { position: fixed; right: max(10px, env(safe-area-inset-right)); 
 footer.version a { color: inherit; }
 .tfield button { padding: 6px 9px; font-size: .8rem; }
 .output.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.who { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.notice.closable { display: flex; gap: 10px; align-items: start; justify-content: space-between; }
+.notice .x { border: 0; background: none; padding: 0 2px; font-size: 1.15rem; line-height: 1; color: inherit; opacity: .7; }
+.notice .x:hover { opacity: 1; }
 .gate { max-width: 360px; margin: 12vh auto 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (prefers-reduced-motion: no-preference) { button, input, select { transition: border-color .15s; } }
@@ -163,6 +167,8 @@ footer.version a { color: inherit; }
       <h1>Sermon <span>Processor</span></h1>
       <div class="row">
         <a id="output-link" href="#" target="_blank" rel="noopener" hidden>Open Output folder</a>
+        <span class="who" id="who" hidden></span>
+        <a id="signout" href="/cdn-cgi/access/logout" hidden>Sign out</a>
         <button class="link" type="button" id="lock">Lock</button>
       </div>
     </header>
@@ -311,6 +317,7 @@ let runsTimer = null;
 async function api(path, init = {}) {
   const r = await fetch(path, { ...init, headers: { "x-passcode": passcode, ...(init.body ? { "content-type": "application/json" } : {}) } });
   const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && data.signIn) { signedOut(); throw new Error("locked"); }
   if (r.status === 401) { lock("That passcode didn't work."); throw new Error("locked"); }
   if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
   return data;
@@ -655,6 +662,14 @@ function validate() {
   $("#send").disabled = errs.length > 0;
 }
 
+function showSendMsg(kind, text) {
+  const msg = $("#send-msg");
+  msg.className = `notice ${kind} closable`;
+  msg.innerHTML = `<span></span><button type="button" class="x" aria-label="Close message">×</button>`;
+  $("span", msg).textContent = text;
+  $(".x", msg).addEventListener("click", () => { msg.hidden = true; });
+  msg.hidden = false;
+}
 $("#send").addEventListener("click", async () => {
   const { outs, errs } = readOutputs();
   const v = currentVideo();
@@ -667,13 +682,12 @@ $("#send").addEventListener("click", async () => {
         instructions: $("#custom-instr").checked ? $("#instructions").value.trim() : "" } },
       height: $("#height").value, label: `Render ${v.path}`,
     }) });
-    msg.hidden = false; msg.className = "notice ok";
-    msg.textContent = "Sent. It appears under Recent runs in a few seconds, and a notice pops up here when it's finished.";
+    showSendMsg("ok", "Sent. It appears under Recent runs in a few seconds, and a notice pops up here when it's finished.");
     watch.pending.push({ label: `Render ${v.path}`, at: Date.now() }); saveWatch();
     setTimeout(loadRuns, 4000);
   } catch (e) {
     if (e.message === "locked") return;
-    msg.hidden = false; msg.className = "notice bad"; msg.textContent = e.message;
+    showSendMsg("bad", e.message);
   } finally {
     btn.textContent = "Send to render"; validate();
   }
@@ -790,7 +804,29 @@ function start() {
   if (!document.querySelector(".output")) addOutput({ name: "YouTube", podcast: true, graphic: true });
   loadFiles(); loadRuns();
 }
-if (passcode) start(); else lock("");
+// ---------- boot: with Cloudflare Access on and no passcode set, skip the passcode screen
+let needPasscode = true;
+function signedOut() {
+  $("#app").hidden = true; $("#gate").hidden = false;
+  $("#gate").innerHTML = `<h1>Sermon <span>Processor</span></h1>
+    <p class="notice">Your sign-in has expired. Reload the page to sign in again.</p>
+    <button class="primary" type="button" onclick="location.reload()">Reload</button>`;
+  clearInterval(runsTimer);
+}
+async function boot() {
+  try {
+    const r = await fetch("/api/session", { headers: { "x-passcode": passcode } });
+    const s = await r.json().catch(() => ({}));
+    if (r.status === 401 && s.signIn) return signedOut();
+    if (r.ok) {
+      needPasscode = s.passcode !== false;
+      if (s.email) { $("#who").textContent = s.email; $("#who").hidden = false; $("#signout").hidden = false; }
+      $("#lock").hidden = !needPasscode;
+    }
+  } catch { /* fall back to the passcode screen */ }
+  if (!needPasscode || passcode) start(); else lock("");
+}
+boot();
 </script>
 </body>
 </html>

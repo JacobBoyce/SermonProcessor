@@ -25,7 +25,8 @@ export default {
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith("/api/")) {
-      return checkPasscode({ request, env, next: () => route(request, env, ctx) });
+      const c = { request, env, data: {}, next: () => route(request, env, ctx) };
+      return checkPasscode(c);
     }
     return env.ASSETS.fetch(request);
   },

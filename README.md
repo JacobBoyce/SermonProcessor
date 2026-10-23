@@ -91,6 +91,10 @@ Cloudflare Pages settings: build command `sh scripts/stamp.sh` (stamps the commi
 | `GOOGLE_CLIENT_SECRET` | Secret | Same as the GitHub secret |
 | `GOOGLE_REFRESH_TOKEN` | Secret | Same as the GitHub secret |
 | `DRIVE_ROOT_FOLDER_ID` | Text | Same as the GitHub variable |
+| `ACCESS_TEAM_DOMAIN` | Text | Optional, for Cloudflare Access: e.g. `sermonprocessor.cloudflareaccess.com` |
+| `ACCESS_AUD` | Text | Optional, for Cloudflare Access: the application's Audience (AUD) tag |
+
+With Cloudflare Access set up, every API request's sign-in token is checked against those two settings (`lib/access.js`), and the page shows who's signed in. `APP_PASSCODE` can then be removed to drop the passcode screen; with both set, both are required.
 
 ### Hosting as a Cloudflare Worker
 

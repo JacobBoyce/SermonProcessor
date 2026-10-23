@@ -66,7 +66,7 @@ export const onRequestGet = wrap(async ({ env }) => {
   });
 });
 
-export const onRequestPost = wrap(async ({ env, request }) => {
+export const onRequestPost = wrap(async ({ env, request, data }) => {
   const body = await request.json().catch(() => null);
   const job = body?.job;
   if (!job || typeof job.source !== "string" || !Array.isArray(job.outputs) || !job.outputs.length) {
@@ -74,6 +74,7 @@ export const onRequestPost = wrap(async ({ env, request }) => {
   }
   const height = body.height === "1080" ? "1080" : "source";
   const label = String(body.label || `Render ${job.source}`).slice(0, 120);
+  if (data?.user?.email) job.requestedBy = data.user.email;   // recorded in the run's job details
   const text = JSON.stringify(job);
   if (text.length > 60_000) throw new AppError("The job is too large");
   await github(env, `/actions/workflows/${WORKFLOW}/dispatches`, {
