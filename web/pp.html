@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Privacy Policy · Sermon Processor</title>
+<meta name="description" content="How Sermon Processor, River Lake Church's sermon editing tool, collects, uses, stores and protects data, including Google user data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="/">Sermon <span>Processor</span></a>
+    <nav><a href="/">Home</a><a href="/terms">Terms</a></nav>
+  </div>
+
+  <h1>Privacy Policy</h1>
+  <p class="muted">Effective October 24, 2026</p>
+
+  <p>Sermon Processor (“the app”, “we”) is a tool run by volunteers at River Lake Church for the church's own use. It edits recordings of Sunday services and prepares them for the church's YouTube channel and podcast. This policy explains what data the app accesses, how it is used, where it is stored, who it is shared with, and how to have it removed.</p>
+  <p>Contact for anything in this policy: <a href="mailto:boysee4545@gmail.com">boysee4545@gmail.com</a>.</p>
+
+  <h2>1. Who uses the app</h2>
+  <p>The app is used only by River Lake Church's media volunteers, who must sign in to open it. It is not offered to the public. The only public parts are this website's information pages and the church podcast's feed.</p>
+
+  <h2>2. Google user data the app accesses</h2>
+  <p>The app connects to Google only through the church's own Google account and YouTube channel. A church administrator signs in once with Google and approves the access below. The app does not ask anyone else to sign in with Google.</p>
+  <div class="table-scroll">
+  <table>
+    <tr><th>Google service and permission</th><th>What the app does with it</th><th>What it does not do</th></tr>
+    <tr>
+      <td><strong>Google Drive</strong><br><code>https://www.googleapis.com/auth/drive</code></td>
+      <td>Lists and reads the files in the church's Sermon Processor folder (service recordings, end graphics, thumbnails, description notes); downloads a recording so it can be edited; saves the edited videos, podcast MP3s and descriptions into that folder's Output folder; saves small private labels on a recording to show editing progress.</td>
+      <td>Does not open, change or delete files outside the church's Sermon Processor folder. Does not share files or change their sharing settings.</td>
+    </tr>
+    <tr>
+      <td><strong>YouTube</strong><br><code>https://www.googleapis.com/auth/youtube.upload</code></td>
+      <td>Uploads an edited video to the church's channel as a <strong>private</strong> video, with its title, description and thumbnail, when a volunteer ticks that option.</td>
+      <td>Does not publish videos, read viewing history, comments, subscribers or analytics, or change existing videos.</td>
+    </tr>
+  </table>
+  </div>
+  <p>Content handled this way is the church's own: recordings of its services, its graphics and the text written about its sermons.</p>
+
+  <h2>3. How the data is used</h2>
+  <p>Google user data is used only to provide the features above for the church: editing the service recording, writing its description, saving the results to the church's Drive, uploading private videos to the church's channel, and publishing podcast episodes the church chooses to publish. It is not used for advertising, not sold, not used to build profiles of anyone, and not used by us to develop or train artificial intelligence or machine learning models.</p>
+
+  <h2>4. Other data</h2>
+  <ul>
+    <li><strong>Volunteer sign-in.</strong> Volunteers sign in to the app with their email address through Cloudflare Access, or with a shared passcode. The app records the email of the volunteer who started an edit or published a podcast episode, so the team can see who did what.</li>
+    <li><strong>Browser storage.</strong> The app may remember the passcode and a few display settings in the volunteer's own browser. It uses no advertising or analytics cookies. Cloudflare Access sets a sign-in cookie.</li>
+    <li><strong>Podcast feed.</strong> Episodes the church publishes, with the show's name, description, author and contact email, are public by design so podcast apps can list them.</li>
+  </ul>
+
+  <h2>5. Services that process the data</h2>
+  <p>The app runs on these services, each only for the purpose shown. Google user data is transferred to them only as needed to provide the app's features.</p>
+  <ul>
+    <li><strong>GitHub (GitHub Actions):</strong> runs the video editing. Each edit runs on a temporary machine that downloads the recording, edits it, uploads the results to the church's Drive or YouTube, and is then deleted. GitHub keeps a text log of each run (file names, titles and descriptions, not the videos) for up to 90 days.</li>
+    <li><strong>Cloudflare:</strong> hosts this website and the app, checks volunteer sign-ins (Cloudflare Access), and stores published podcast episodes (audio, cover images, titles and descriptions) for the public podcast feed (Cloudflare R2).</li>
+    <li><strong>Google Gemini API:</strong> receives a reduced-quality audio copy of the sermon to draft its title and summary. The draft is returned to the app; the audio is used for nothing else by us.</li>
+  </ul>
+  <p>We do not share data with anyone else, except if required by law.</p>
+
+  <h2>6. Storage and how long data is kept</h2>
+  <ul>
+    <li>Edited videos, podcast MP3s and descriptions are kept in the church's own Google Drive, and private videos in the church's own YouTube channel, until the church deletes them.</li>
+    <li>Copies made while editing exist only on the temporary machine and are deleted when the run ends.</li>
+    <li>Podcast episodes stay in the feed until a volunteer removes them in the app, which deletes the episode's audio.</li>
+    <li>The Google sign-in approval (an access token) is stored encrypted in GitHub's and Cloudflare's secret settings, readable only by the app's own code, until it is revoked.</li>
+    <li>Run logs on GitHub are deleted after up to 90 days.</li>
+  </ul>
+
+  <h2>7. Security</h2>
+  <p>All connections use HTTPS. The app can only be opened by approved volunteers. Google sign-in tokens and other keys are kept as encrypted secrets and are never shown in the app or sent to browsers.</p>
+
+  <h2>8. Your choices and deleting data</h2>
+  <ul>
+    <li>The church can withdraw the app's access to its Google account at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. The app then stops being able to read Drive or upload to YouTube.</li>
+    <li>Files can be deleted directly in Google Drive, and videos in YouTube Studio.</li>
+    <li>To have anything else deleted, such as podcast episodes or a volunteer's email in the app's records, email <a href="mailto:boysee4545@gmail.com">boysee4545@gmail.com</a>. We will delete it within 30 days.</li>
+  </ul>
+
+  <h2>9. Google API Services User Data Policy</h2>
+  <p>Sermon Processor's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2>10. Children</h2>
+  <p>The app is not directed to children and is used only by adult church volunteers.</p>
+
+  <h2>11. Changes to this policy</h2>
+  <p>If this policy changes, the new version will be posted on this page with a new effective date. Significant changes will be shared with the church's volunteers before they take effect.</p>
+
+  <footer>
+    <a href="/">Home</a><a href="/terms">Terms of Service</a>
+    <div>© 2026 River Lake Church</div>
+  </footer>
+</div>
+</body>
+</html>

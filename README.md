@@ -78,7 +78,7 @@ To skip a section in the middle of an output, give it `segments` instead of `in`
 
 ## Web app (Phases 3–4)
 
-`web/index.html` is the setup screen and `functions/api/` is its API, both hosted on Cloudflare Pages (free). The API reads Drive with the same Google sign-in as the worker, and starts **Process from Drive** on GitHub.
+`web/app/index.html` is the app (at `/app/`) and `functions/api/` is its API. The public pages Google requires for verifying the sign-in app are `web/index.html` (home, `/`), `web/pp.html` (privacy policy, `/pp`) and `web/terms.html` (`/terms`); Cloudflare Access should cover only the paths `app` and `api`, so these stay public, both hosted on Cloudflare Pages (free). The API reads Drive with the same Google sign-in as the worker, and starts **Process from Drive** on GitHub.
 
 Cloudflare Pages settings: build command `sh scripts/stamp.sh` (stamps the commit into the page's bottom-right corner), build output directory `web`. Settings → Variables and secrets:
 

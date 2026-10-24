@@ -1,0 +1,44 @@
+/* Shared look for the public pages (home, privacy policy, terms). Matches the app. */
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --fg: #1d2330; --muted: #5d6676; --line: #d8dce4;
+  --accent: #d9711c; --accent-fg: #ffffff; --link: #2d6fb8;
+  --sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --surface: #1a1f28; --fg: #e8ebf1; --muted: #9aa3b2; --line: #2e3542;
+    --accent: #f09a4f; --accent-fg: #1a1208; --link: #6fa8ec;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--sans); }
+a { color: var(--link); }
+.wrap { max-width: 760px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-right)) 64px max(16px, env(safe-area-inset-left)); }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--fg); text-decoration: none; letter-spacing: -.01em; }
+.brand span { color: var(--accent); }
+.top nav { display: flex; gap: 16px; font-size: .92rem; flex-wrap: wrap; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.2; margin: 0 0 12px; letter-spacing: -.02em; }
+h2 { font-size: 1.15rem; margin: 32px 0 8px; }
+h3 { font-size: 1rem; margin: 20px 0 4px; }
+p, li { color: var(--fg); }
+.lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 24px; }
+.muted { color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin: 20px 0; }
+.card h2:first-child { margin-top: 0; }
+.button { display: inline-block; background: var(--accent); color: var(--accent-fg); text-decoration: none; font-weight: 600;
+  padding: 11px 18px; border-radius: 10px; }
+.button:hover { filter: brightness(1.05); }
+.actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 8px 0 8px; }
+ol, ul { padding-left: 1.3em; }
+li { margin: 4px 0; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-top: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+.table-scroll { overflow-x: auto; }
+code { font-size: .9em; }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: .9rem; color: var(--muted); }
+footer a { margin-right: 14px; }
