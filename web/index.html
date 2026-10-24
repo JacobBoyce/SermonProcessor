@@ -393,6 +393,7 @@ footer.version a { color: inherit; }
     <div class="row" style="gap:18px">
       <label class="check"><input type="checkbox" class="o-podcast"> Also make the podcast audio (MP3)</label>
       <label class="check"><input type="checkbox" class="o-feed"> Add it to the podcast feed as a draft</label>
+      <label class="check"><input type="checkbox" class="o-youtube"> Upload to YouTube as a private video</label>
     </div>
     <p class="warn-line o-feed-warn" hidden><span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> Rendering replaces the fields marked <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> in <b>Podcast episode</b> below: audio, episode image, title and description.</p>
   </div>
@@ -642,6 +643,7 @@ function addOutput(preset = {}) {
   $(".o-name", card).value = preset.name || (n === 1 ? "YouTube" : `Output ${n}`);
   $(".o-podcast", card).checked = !!preset.podcast;
   $(".o-feed", card).checked = !!preset.feed;
+  $(".o-youtube", card).checked = !!preset.youtube;
   const syncFeed = () => {
     const on = $(".o-podcast", card).checked;
     $(".o-feed", card).disabled = !on;
@@ -760,7 +762,7 @@ function readOutputs() {
     $(".o-length", card).textContent = clipKnown && rows.length
       ? `Total ${fmt(clip)}${g ? ` + ${secs || 0}s graphic` : ""}` : "";
     const out = { name, endGraphic: g ? { file: g.path, seconds: secs, crossfade: fade } : null, podcast: $(".o-podcast", card).checked,
-      feed: $(".o-podcast", card).checked && $(".o-feed", card).checked };
+      feed: $(".o-podcast", card).checked && $(".o-feed", card).checked, youtube: $(".o-youtube", card).checked };
     if (segments.length === 1) Object.assign(out, segments[0]); else out.segments = segments;
     outs.push(out);
   });

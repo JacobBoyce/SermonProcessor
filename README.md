@@ -114,3 +114,12 @@ The **Podcast** section has one **Next episode**: audio, image, title and descri
 - Show settings (name, description, author, owner email, cover, test flag) are edited in the Podcast section and stored in the bucket. A test feed carries `itunes:block` so directories don't list it.
 - GitHub settings for the worker: secrets `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`; variables `R2_ENDPOINT`, `R2_BUCKET`.
 - With Cloudflare Access on, `/podcast/` needs its own Access application with a **Bypass** policy, so podcast apps can read it.
+
+## YouTube, private upload (Phase 7)
+
+Tick **Upload to YouTube as a private video** on an output and, after the render, the worker uploads that MP4 to YouTube as **private**, with the description's title and summary and the video's thumbnail from Thumbnails (made into a 1280×720 JPEG under 2 MB). Nothing is published: someone opens the video in YouTube Studio (the link is in the run's summary on GitHub), checks it and makes it public. A YouTube problem never fails the render; the video is already in Drive.
+
+- GitHub settings: secret `YOUTUBE_REFRESH_TOKEN` (made with the same Google OAuth client as Drive, signed in as the account that owns the channel, scope `https://www.googleapis.com/auth/youtube.upload`); optional variable `YOUTUBE_CATEGORY` (default `29`, Nonprofits & Activism).
+- The YouTube Data API v3 must be enabled in the Google Cloud project, and `youtube.upload` added to the OAuth consent screen's scopes.
+- Custom thumbnails need a verified channel (youtube.com/verify). Without it the upload still works and YouTube picks a frame.
+- Daily limit: the API allows about 100 uploads a day per Google project.

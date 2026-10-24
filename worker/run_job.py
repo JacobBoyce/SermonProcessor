@@ -37,6 +37,7 @@ import render  # noqa: E402
 from drive import Drive, DriveError  # noqa: E402
 import describe  # noqa: E402
 import podcast  # noqa: E402
+import youtube  # noqa: E402
 
 FOLDERS = ("Incoming", "Graphics", "Thumbnails", "Output")
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".mts", ".avi"}
@@ -103,11 +104,12 @@ def find_thumbnail(drive, thumbs_id: str, rel_video: str):
 class Progress:
     """Overall progress for the web app, saved as private labels on the source video.
 
-    Stages and their share of the bar: download 6%, render 84%, upload 6%,
-    description 4%. Saved at most every 15 s (and on each stage change). Any
+    Stages and their share of the bar: download 5%, render 78%, upload 5%,
+    description 3%, YouTube 9%. Saved at most every 15 s (and on each stage change). Any
     problem saving progress is ignored: it must never stop a render.
     """
-    STAGES = {"download": (0.00, 0.06), "render": (0.06, 0.84), "upload": (0.90, 0.06), "describe": (0.96, 0.04)}
+    STAGES = {"download": (0.00, 0.05), "render": (0.05, 0.78), "upload": (0.83, 0.05), "describe": (0.88, 0.03),
+              "youtube": (0.91, 0.09)}
     EVERY = 15.0
 
     def __init__(self, drive, file_id: str):
@@ -192,6 +194,7 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
         described = write_description(drive, folders, rel_source, local_job, written, out_dir, work)
         prog.update("describe", 0.8, "Saving the podcast draft", 30, force=True)
         save_podcast_drafts(drive, folders, rel_source, local_job, written, described, work)
+        upload_to_youtube(drive, folders, rel_source, local_job, written, described, work, prog)
     except BaseException:
         prog.finish(False)
         raise
@@ -345,6 +348,70 @@ def save_podcast_drafts(drive, folders: dict, rel_source: str, job: dict, writte
     except Exception as exc:   # noqa: BLE001
         print(f"  Skipped: {exc}")
         summary(f"\n**Podcast draft skipped:** {exc}")
+
+
+def upload_to_youtube(drive, folders: dict, rel_source: str, job: dict, written: list[Path],
+                      described: tuple[str, str] | None, work: Path, prog) -> None:
+    """Upload each output marked "youtube" as a private video, with the description and thumbnail.
+
+    Nothing is published: the video stays private until someone makes it public in
+    YouTube Studio. A problem here is reported but never fails the job.
+    """
+    wanted = [o for o in job.get("outputs", []) if o.get("youtube")]
+    if not wanted:
+        return
+    print("\nYouTube (private):")
+    missing = youtube.missing_settings()
+    if missing:
+        print("  Skipped: missing GitHub secrets " + ", ".join(missing))
+        summary("\n**YouTube upload skipped:** missing GitHub secrets " + ", ".join(missing))
+        return
+    label = str(job.get("prefix") or job.get("date") or "").strip()
+    prefix = f"{label} " if label else ""
+    title, body = described or ("", "")
+    try:
+        token = youtube._access_token()
+        thumb = find_thumbnail(drive, folders["Thumbnails"].id, rel_source)
+        jpg = None
+        if thumb:
+            local = drive.download(thumb, work / "yt-thumb" / thumb.name, progress=lambda *_: None)
+            jpg = youtube.thumbnail_jpeg(local, work / "yt-thumb" / "thumbnail.jpg")
+    except Exception as exc:   # noqa: BLE001
+        print(f"  Skipped: {exc}")
+        summary(f"\n**YouTube upload skipped:** {exc}")
+        return
+    total = sum(f.stat().st_size for o in wanted for f in written
+                if f.suffix == ".mp4" and f.name == f"{prefix}{render.safe_name(str(o.get('name') or ''))}.mp4") or 1
+    done = 0
+    for out in wanted:
+        name = render.safe_name(str(out.get("name") or ""))
+        video = next((f for f in written if f.suffix == ".mp4" and f.name == f"{prefix}{name}.mp4"), None)
+        if video is None:
+            print(f"  {name}: no video was made, so nothing to upload")
+            continue
+        video_title = title or f"{prefix}{name}".strip()
+        if title and len(wanted) > 1:
+            video_title = f"{title} ({name})"
+        try:
+            base = done
+            vid = youtube.upload(video, video_title, body, token=token,
+                                 on_bytes=lambda s, _n, b=base: prog.update("youtube", (b + s) / total,
+                                                                            "Uploading to YouTube" + (f" ({name})" if len(wanted) > 1 else "")))
+            done += video.stat().st_size
+            note = ""
+            if jpg:
+                try:
+                    youtube.set_thumbnail(vid, jpg)
+                except Exception as exc:   # noqa: BLE001
+                    note = f" (thumbnail not set: {exc})"
+            else:
+                note = " (no thumbnail found in Thumbnails)"
+            link = youtube.studio_link(vid)
+            print(f"  {name}: uploaded as private → {link}{note}")
+            summary(f"\n**On YouTube (private):** [{video_title}]({link}){note}")
+        except Exception as exc:   # noqa: BLE001
+            print(f"  {name}: upload failed: {exc}")
+            summary(f"\n**YouTube upload failed for {name}:** {exc}")
 
 
 def main() -> int:
