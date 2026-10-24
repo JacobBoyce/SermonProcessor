@@ -34,9 +34,9 @@ export default {
       return checkPasscode(c);
     }
     // The podcast feed and its files are public, for podcast apps.
-    if (pathname === "/podcast/feed.xml") return feed.onRequestGet({ request, env });
+    if (pathname === "/podcast/feed.xml") return feed.onRequestGet({ request, env, waitUntil: ctx.waitUntil.bind(ctx) });
     if (pathname.startsWith("/podcast/media/")) {
-      return media.onRequest({ request, env, params: { path: pathname.slice("/podcast/media/".length).split("/") } });
+      return media.onRequest({ request, env, waitUntil: ctx.waitUntil.bind(ctx), params: { path: pathname.slice("/podcast/media/".length).split("/") } });
     }
     return env.ASSETS.fetch(request);
   },

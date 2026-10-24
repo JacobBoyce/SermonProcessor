@@ -131,6 +131,7 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .eps-tools input { flex: 1 1 220px; }
 .eps-tools select { flex: 0 0 auto; }
 .ep .t { overflow-wrap: anywhere; }
+.ep .reach { font-size: .76rem; color: var(--ok); cursor: help; }
 .ep.small { grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; padding: 8px 10px; }
 .ep.small img, .ep.small .noimg { width: 48px; }
 .ep.small .t { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
@@ -307,6 +308,7 @@ footer.version a { color: inherit; }
             <details class="showset" id="pod-eps">
               <summary>Episodes in the feed <span class="hint" id="eps-sum"></span></summary>
               <div class="stack" style="gap:10px;margin-top:12px">
+                <p class="hint" id="feed-readers"></p>
                 <div class="row eps-tools">
                   <input type="search" id="eps-q" placeholder="Search titles and descriptions" aria-label="Search episodes">
                   <select id="eps-year" aria-label="Year"></select>
@@ -1008,6 +1010,7 @@ let epsShown = EPS_PAGE;
 const byDate = () => [...pod.episodes].sort((a, b) => String(b.published).localeCompare(String(a.published)));
 const yearOf = (e) => String(e.published || "").slice(0, 4);
 function renderEpisodes() {
+  renderReaders();
   const all = byDate();
   const latest = all[0];
   $("#eps-sum").textContent = all.length
@@ -1029,6 +1032,8 @@ function renderEpisodes() {
       <button type="button" class="link danger e-out">${e.imported ? "" : "Take out of the feed"}</button>`;
     $(".t", el).textContent = e.title;
     $(".meta", el).textContent = [new Date(e.published).toLocaleDateString(), mins(e.duration), e.imported ? "imported" : ""].filter(Boolean).join(" · ");
+    const reach = epReach(e.id);
+    if (reach) { const r = document.createElement("div"); r.className = "reach"; r.textContent = reach.text; r.title = reach.detail; $(".t", el).parentElement.append(r); }
     const out = $(".e-out", el);
     if (e.imported) out.remove();
     else out.onclick = async () => {
@@ -1041,6 +1046,26 @@ function renderEpisodes() {
   $("#eps-more").hidden = list.length <= epsShown;
   $("#eps-count").textContent = list.length && (q || ySel.value || list.length > epsShown)
     ? `Showing ${Math.min(epsShown, list.length)} of ${list.length}${list.length !== all.length ? ` (of ${all.length} in the feed)` : ""}` : "";
+}
+// Which podcast apps have read the feed and fetched each episode (counted by the site).
+const HIDE = new Set(["Bots and checkers"]);
+function renderReaders() {
+  const feed = (pod.stats?.feed || []).filter((r) => !HIDE.has(r.app));
+  $("#feed-readers").textContent = feed.length
+    ? "Feed last checked by: " + feed.map((r) => `${r.app} ${ago(r.last)}`).join(" · ")
+    : "No podcast app has checked this feed yet. Spotify and Apple start checking once the feed is submitted to them (or, at launch, redirected).";
+}
+function epReach(id) {
+  const rows = (pod.stats?.episodes?.[id] || []).filter((r) => !HIDE.has(r.app));
+  if (!rows.length) return null;
+  const spotify = rows.find((r) => r.app === "Spotify");
+  const listens = rows.filter((r) => r.app !== "Spotify").reduce((n, r) => n + r.count, 0);
+  const parts = [];
+  if (spotify) parts.push("✓ Copied by Spotify");
+  if (rows.some((r) => r.app === "Apple Podcasts" || r.app === "Apple device")) parts.push("✓ Apple");
+  if (listens) parts.push(`about ${listens} download${listens === 1 ? "" : "s"}`);
+  return { text: parts.join(" · "),
+    detail: rows.map((r) => `${r.app}: ${r.count} (first ${new Date(r.first).toLocaleString()}, last ${ago(r.last)})`).join("\n") };
 }
 $("#eps-q").addEventListener("input", () => { epsShown = EPS_PAGE; renderEpisodes(); });
 $("#eps-year").addEventListener("change", () => { epsShown = EPS_PAGE; renderEpisodes(); });

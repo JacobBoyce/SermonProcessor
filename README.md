@@ -123,3 +123,4 @@ Tick **Upload to YouTube as a private video** on an output and, after the render
 - The YouTube Data API v3 must be enabled in the Google Cloud project, and `youtube.upload` added to the OAuth consent screen's scopes.
 - Custom thumbnails need a verified channel (youtube.com/verify). Without it the upload still works and YouTube picks a frame.
 - Daily limit: the API allows about 100 uploads a day per Google project.
+- **Who reads the feed:** the feed and audio addresses note which app made each request (from its user agent) in tiny objects under `podcast/stats/` in the bucket (`lib/stats.js`). The Episodes list shows which apps last checked the feed, and per episode whether Spotify copied it, whether Apple fetched it, and roughly how many downloads it had. Requests from the app's own players aren't counted. Counts are approximate.

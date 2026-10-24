@@ -4,6 +4,7 @@
 import { AppError, drive } from "../../lib/google.js";
 import { json, wrap } from "../../lib/http.js";
 import { bucket, copyFromDrive, getDraft, getEpisodes, getShow, putJson } from "../../lib/podcast.js";
+import { dropEpisodeStats, readStats } from "../../lib/stats.js";
 
 const ID = /^[0-9a-f]{32}$/;
 const DRIVE_ID = /^[\w-]{10,}$/;
@@ -55,9 +56,10 @@ async function dropUnused(env, keys, keep) {
 
 export const onRequestGet = wrap(async ({ env, request }) => {
   if (!env.PODCAST_BUCKET) return json({ configured: false });
-  const [show, draft, episodes] = await Promise.all([getShow(env), getDraft(env), getEpisodes(env)]);
+  const [show, draft, episodes, stats] = await Promise.all([getShow(env), getDraft(env), getEpisodes(env),
+    readStats(env).catch(() => ({ feed: [], episodes: {} }))]);
   const origin = new URL(request.url).origin;
-  return json({ configured: true, feedUrl: `${origin}/podcast/feed.xml`, show, draft, episodes });
+  return json({ configured: true, feedUrl: `${origin}/podcast/feed.xml`, show, draft, episodes, stats });
 });
 
 export const onRequestPost = wrap(async ({ env, request, data }) => {
@@ -156,6 +158,7 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
     const rest = episodes.filter((e) => e.id !== id);
     await putJson(env, "podcast/episodes.json", rest);
     if (!ep.imported) await dropUnused(env, [ep.audio, ep.image], [...rest, draft]);
+    await dropEpisodeStats(env, id).catch(() => {});
     return json({ ok: true });
   }
 

@@ -1,5 +1,6 @@
 // GET /podcast/media/audio/<id>.mp3 and /podcast/media/images/<id>.jpg: public episode files.
 // Supports Range requests, which podcast apps use to seek and resume downloads.
+import { recordDownload } from "../../../lib/stats.js";
 
 const ALLOWED = /^(audio\/[0-9a-f]{32}\.mp3|images\/([0-9a-f]{32}|show-[0-9a-z]+)\.jpe?g|images\/show-[0-9a-z]+\.png)$/;
 
@@ -15,7 +16,8 @@ function parseRange(header, size) {
   return { start, end };
 }
 
-export async function onRequest({ env, request, params }) {
+export async function onRequest(ctx) {
+  const { env, request, params } = ctx;
   if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
   if (!env.PODCAST_BUCKET) return new Response("Podcast not set up", { status: 503 });
   const rel = [].concat(params.path || []).join("/");
@@ -30,6 +32,8 @@ export async function onRequest({ env, request, params }) {
 
   const range = parseRange(request.headers.get("range"), size);
   if (range === "invalid") return new Response(null, { status: 416, headers: { "content-range": `bytes */${size}` } });
+  const ep = /^audio\/([0-9a-f]{32})\.mp3$/.exec(rel);
+  if (ep && request.method === "GET") recordDownload(ctx, ep[1], range ? range.start : 0);
   if (request.method === "HEAD") {
     return new Response(null, { headers: { ...base, "content-length": String(size) } });
   }
