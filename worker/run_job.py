@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render  # noqa: E402
 from drive import Drive, DriveError  # noqa: E402
 import describe  # noqa: E402
+import podcast  # noqa: E402
 
 FOLDERS = ("Incoming", "Graphics", "Thumbnails", "Output")
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".mts", ".avi"}
@@ -188,7 +189,9 @@ def do_render(drive, root_id: str, job: dict, work: Path, height: str | None) ->
     try:
         written, out_dir, local_job = _process(drive, folders, rel_source, src, job, work, height, prog)
         prog.update("describe", 0, "Writing the description", 60, force=True)
-        write_description(drive, folders, rel_source, local_job, written, out_dir, work)
+        described = write_description(drive, folders, rel_source, local_job, written, out_dir, work)
+        prog.update("describe", 0.8, "Saving the podcast draft", 30, force=True)
+        save_podcast_drafts(drive, folders, rel_source, local_job, written, described, work)
     except BaseException:
         prog.finish(False)
         raise
@@ -266,7 +269,7 @@ def _process(drive, folders: dict, rel_source: str, src, job: dict, work: Path, 
 
 
 def write_description(drive, folders: dict, rel_source: str, job: dict, written: list[Path],
-                      out_dir: Path, work: Path) -> None:
+                      out_dir: Path, work: Path) -> tuple[str, str] | None:
     """Save '<name> description.txt' (and .json) next to the outputs.
 
     Uses the person's own .txt from Incoming when there is one; otherwise asks
@@ -277,7 +280,7 @@ def write_description(drive, folders: dict, rel_source: str, job: dict, written:
     if isinstance(opts, bool):
         opts = {"enabled": opts}
     if not opts.get("enabled", True) or not written:
-        return
+        return None
     main = next((f for f in written if f.suffix == ".mp3"), written[0])   # podcast audio, else first video
     label = str(job.get("prefix") or job.get("date") or "").strip()
     base = f"{label} description" if label else "description"
@@ -305,9 +308,42 @@ def write_description(drive, folders: dict, rel_source: str, job: dict, written:
         print(f"  from {source} → {where}\n\n{title}\n\n{body}")
         summary(f"\n## Description ({'your file ' + source if own else source})\n\n**{title}**\n\n" +
                 body.replace("\n", "  \n"))
+        return title, body
     except Exception as exc:   # noqa: BLE001 - a description problem must never fail a finished render
         print(f"  Skipped: {exc}")
         summary(f"\n**Description skipped:** {exc}")
+        return None
+
+
+def save_podcast_drafts(drive, folders: dict, rel_source: str, job: dict, written: list[Path],
+                        described: tuple[str, str] | None, work: Path) -> None:
+    """For each output marked "feed", save its podcast MP3 as a draft episode for the web app.
+
+    Like the description, a problem here is reported but never fails the job.
+    """
+    wanted = [o for o in job.get("outputs", []) if o.get("feed") and o.get("podcast")]
+    if not wanted:
+        return
+    print("\nPodcast drafts:")
+    label = str(job.get("prefix") or job.get("date") or "").strip()
+    prefix = f"{label} " if label else ""
+    try:
+        thumb = find_thumbnail(drive, folders["Thumbnails"].id, rel_source)
+        cover = drive.download(thumb, work / "thumb" / thumb.name, progress=lambda *_: None) if thumb else None
+        title, body = described or ("", "")
+        for out in wanted:
+            name = render.safe_name(str(out.get("name") or ""))
+            mp3 = next((f for f in written if f.suffix == ".mp3" and f.name == f"{prefix}{name}.mp3"), None)
+            if mp3 is None:
+                print(f"  {name}: no podcast MP3 was made, so no draft")
+                continue
+            draft = podcast.save_draft(mp3, cover, title or f"{prefix}{name}".strip(), body, rel_source, name, work)
+            print(f"  {name}: draft saved ({draft['duration'] // 60} min, {draft['bytes'] / 1048576:.0f} MB)"
+                  f"{'' if cover else ', no thumbnail found so the show cover will be used'}")
+            summary(f"\n**Podcast draft saved:** {draft['title']}. Publish it from the web app's Podcast section.")
+    except Exception as exc:   # noqa: BLE001
+        print(f"  Skipped: {exc}")
+        summary(f"\n**Podcast draft skipped:** {exc}")
 
 
 def main() -> int:

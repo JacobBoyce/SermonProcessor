@@ -5,6 +5,9 @@ import * as files from "../functions/api/files.js";
 import * as jobs from "../functions/api/jobs.js";
 import * as image from "../functions/api/image/[id].js";
 import * as video from "../functions/api/video/[id].js";
+import * as podcastApi from "../functions/api/podcast.js";
+import * as feed from "../functions/podcast/feed.xml.js";
+import * as media from "../functions/podcast/media/[[path]].js";
 import { json } from "../lib/http.js";
 
 function route(request, env, ctx) {
@@ -18,6 +21,8 @@ function route(request, env, ctx) {
   if (img && method === "GET") return image.onRequestGet({ ...base, params: { id: img[1] } });
   const vid = pathname.match(/^\/api\/video\/([\w-]+)$/);
   if (vid && method === "GET") return video.onRequestGet({ ...base, params: { id: vid[1] } });
+  if (pathname === "/api/podcast" && method === "GET") return podcastApi.onRequestGet(base);
+  if (pathname === "/api/podcast" && method === "POST") return podcastApi.onRequestPost(base);
   return json({ error: "Not found" }, 404);
 }
 
@@ -27,6 +32,11 @@ export default {
     if (pathname.startsWith("/api/")) {
       const c = { request, env, data: {}, next: () => route(request, env, ctx) };
       return checkPasscode(c);
+    }
+    // The podcast feed and its files are public, for podcast apps.
+    if (pathname === "/podcast/feed.xml") return feed.onRequestGet({ request, env });
+    if (pathname.startsWith("/podcast/media/")) {
+      return media.onRequest({ request, env, params: { path: pathname.slice("/podcast/media/".length).split("/") } });
     }
     return env.ASSETS.fetch(request);
   },

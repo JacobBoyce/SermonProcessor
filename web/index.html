@@ -116,6 +116,23 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .tfield input { width: calc(10ch + 24px); flex: none; }
 .folders { display: flex; gap: 10px; flex-wrap: wrap; }
 .folders label { flex: 1 1 160px; }
+.feedline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.feedline code { font-family: var(--mono); font-size: .8rem; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; overflow-wrap: anywhere; min-width: 0; }
+.feedline button { padding: 5px 10px; font-size: .85rem; }
+.showset { border: 1px solid var(--line); border-radius: 9px; padding: 10px 14px; }
+.showset summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
+.subhead { margin: 6px 0 0; font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.ep { border: 1px solid var(--line); border-radius: 9px; padding: 12px; display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; }
+.ep img, .ep .noimg { width: 88px; aspect-ratio: 1; border-radius: 6px; object-fit: cover; background: var(--sunk); border: 1px solid var(--line); }
+.ep .body { display: grid; gap: 8px; min-width: 0; }
+.ep audio { width: 100%; height: 34px; }
+.ep .meta { font-size: .76rem; }
+.ep .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.ep.small { grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; padding: 8px 10px; }
+.ep.small img, .ep.small .noimg { width: 48px; }
+.ep.small .t { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
+button.danger { color: var(--bad); }
+@media (max-width: 520px) { .ep { grid-template-columns: minmax(0, 1fr); } .ep.small { grid-template-columns: 48px minmax(0, 1fr); } }
 .sendbar { display: grid; gap: 10px; justify-items: end; }
 .sendbar .errors, .sendbar .notice { justify-self: stretch; }
 .toasts { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: calc(max(8px, env(safe-area-inset-bottom)) + 34px);
@@ -234,6 +251,42 @@ footer.version a { color: inherit; }
           <button class="primary" type="button" id="send">Send to render</button>
           <div id="send-msg" class="notice" hidden></div>
         </section>
+
+        <section class="panel" id="podcast" aria-labelledby="h-pod">
+          <div class="row spread"><h2 id="h-pod">Podcast</h2><button type="button" id="pod-refresh">Refresh</button></div>
+          <div id="pod-msg" class="notice" hidden></div>
+          <div id="pod-body" hidden>
+            <div class="feedline">
+              <span class="hint">Feed address</span>
+              <code id="feed-url"></code>
+              <button type="button" id="feed-copy">Copy</button>
+              <span class="chip queued" id="feed-test" title="This feed asks podcast directories not to list it">Test feed</span>
+            </div>
+            <details class="showset" id="pod-show">
+              <summary>Show settings</summary>
+              <div class="stack" style="gap:10px; margin-top:12px">
+                <label for="show-title">Show name<input id="show-title" maxlength="200"></label>
+                <label for="show-desc">Show description<textarea id="show-desc" rows="3" maxlength="4000"></textarea></label>
+                <div class="row" style="gap:10px">
+                  <label for="show-author" style="flex:1 1 200px">Author (shown in podcast apps)<input id="show-author" maxlength="200"></label>
+                  <label for="show-email" style="flex:1 1 200px">Owner email (apps use it to verify ownership)<input id="show-email" type="email" maxlength="200"></label>
+                </div>
+                <div class="row" style="gap:12px; align-items:end">
+                  <div class="gprev" id="show-cover-prev" style="width:96px; aspect-ratio:1">None</div>
+                  <label for="show-cover" style="flex:1 1 220px">Show cover (square, 1400–3000 px, from the Graphics folder)
+                    <select id="show-cover"></select>
+                  </label>
+                </div>
+                <label class="check"><input type="checkbox" id="show-test"> Test feed: ask podcast directories not to list it</label>
+                <div class="row spread"><span class="hint" id="show-msg"></span><button type="button" id="show-save">Save show settings</button></div>
+              </div>
+            </details>
+            <h3 class="subhead">Drafts</h3>
+            <div id="pod-drafts" class="stack" style="gap:12px"></div>
+            <h3 class="subhead">In the feed</h3>
+            <div id="pod-episodes" class="stack" style="gap:8px"></div>
+          </div>
+        </section>
       </div>
 
       <aside class="panel" aria-labelledby="h-runs">
@@ -297,7 +350,10 @@ footer.version a { color: inherit; }
         <input class="o-fade" type="number" min="0" step="0.1" value="1">
       </label>
     </div>
-    <label class="check"><input type="checkbox" class="o-podcast"> Also make the podcast audio (MP3)</label>
+    <div class="row" style="gap:18px">
+      <label class="check"><input type="checkbox" class="o-podcast"> Also make the podcast audio (MP3)</label>
+      <label class="check"><input type="checkbox" class="o-feed"> Add it to the podcast feed as a draft</label>
+    </div>
   </div>
 </template>
 
@@ -544,6 +600,9 @@ function addOutput(preset = {}) {
   const n = document.querySelectorAll(".output").length + 1;
   $(".o-name", card).value = preset.name || (n === 1 ? "YouTube" : `Output ${n}`);
   $(".o-podcast", card).checked = !!preset.podcast;
+  $(".o-feed", card).checked = !!preset.feed;
+  const syncFeed = () => { const on = $(".o-podcast", card).checked; $(".o-feed", card).disabled = !on; if (!on) $(".o-feed", card).checked = false; };
+  $(".o-podcast", card).addEventListener("change", syncFeed); syncFeed();
   card.dataset.graphicAuto = preset.graphic ? "1" : "0";
   card.querySelectorAll("input,select").forEach((el, i) => { el.id = `o${n}-${i}`; });
   card.dataset.n = n;
@@ -646,7 +705,8 @@ function readOutputs() {
     }
     $(".o-length", card).textContent = clipKnown && rows.length
       ? `Total ${fmt(clip)}${g ? ` + ${secs || 0}s graphic` : ""}` : "";
-    const out = { name, endGraphic: g ? { file: g.path, seconds: secs, crossfade: fade } : null, podcast: $(".o-podcast", card).checked };
+    const out = { name, endGraphic: g ? { file: g.path, seconds: secs, crossfade: fade } : null, podcast: $(".o-podcast", card).checked,
+      feed: $(".o-podcast", card).checked && $(".o-feed", card).checked };
     if (segments.length === 1) Object.assign(out, segments[0]); else out.segments = segments;
     outs.push(out);
   });
@@ -712,6 +772,125 @@ function progressHtml(r) {
   return `<div class="prog">${esc(text)}</div>
     <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progress"><span style="width:${Math.max(pct, 2)}%"></span></div>`;
 }
+// ---------- podcast: drafts, publishing and show settings
+let pod = null;
+const media = (key) => key ? `/podcast/media/${key.replace(/^podcast\//, "")}` : "";
+const mins = (s) => s ? (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`) : "";
+function podMsg(kind, text) {
+  const m = $("#pod-msg");
+  if (!text) { m.hidden = true; return; }
+  m.className = `notice ${kind} closable`;
+  m.innerHTML = `<span></span><button type="button" class="x" aria-label="Close message">×</button>`;
+  $("span", m).textContent = text; $(".x", m).onclick = () => { m.hidden = true; }; m.hidden = false;
+}
+async function podPost(payload) { return api("/api/podcast", { method: "POST", body: JSON.stringify(payload) }); }
+async function loadPodcast() {
+  try { pod = await api("/api/podcast"); }
+  catch (e) { if (e.message !== "locked") podMsg("bad", e.message); return; }
+  if (!pod.configured) {
+    $("#pod-body").hidden = true;
+    podMsg("", "");
+    $("#pod-msg").hidden = false; $("#pod-msg").className = "notice";
+    $("#pod-msg").textContent = "The podcast bucket isn't linked to this site yet. Add an R2 bucket binding named PODCAST_BUCKET in Cloudflare.";
+    return;
+  }
+  $("#pod-body").hidden = false;
+  $("#feed-url").textContent = pod.feedUrl;
+  $("#feed-test").hidden = !pod.show.test;
+  fillShow();
+  renderDrafts(); renderEpisodes();
+}
+function fillShow() {
+  const s = pod.show;
+  if (document.activeElement?.closest("#pod-show")) return;      // don't overwrite while someone is typing
+  $("#show-title").value = s.title || ""; $("#show-desc").value = s.description || "";
+  $("#show-author").value = s.author || ""; $("#show-email").value = s.email || "";
+  $("#show-test").checked = !!s.test;
+  const sel = $("#show-cover");
+  sel.innerHTML = `<option value="">${s.image ? "Keep the current cover" : "No cover yet"}</option>` +
+    files.graphics.map((g) => `<option value="${g.id}">${esc(g.path)}</option>`).join("");
+  showCoverPreview();
+}
+function showCoverPreview() {
+  const id = $("#show-cover").value, p = $("#show-cover-prev");
+  p.innerHTML = id ? `<img alt="" src="${img(id)}">` : pod?.show.image ? `<img alt="" src="${media(pod.show.image)}">` : "None";
+}
+$("#show-cover").addEventListener("change", showCoverPreview);
+$("#show-save").addEventListener("click", async () => {
+  const btn = $("#show-save"); btn.disabled = true; $("#show-msg").textContent = "Saving…";
+  try {
+    const r = await podPost({ action: "show", show: {
+      title: $("#show-title").value, description: $("#show-desc").value, author: $("#show-author").value,
+      email: $("#show-email").value, test: $("#show-test").checked, coverId: $("#show-cover").value || undefined } });
+    pod.show = r.show;
+    $("#show-msg").textContent = r.warning || "Saved. Podcast apps pick up changes the next time they check the feed.";
+    $("#feed-test").hidden = !r.show.test;
+    $("#show-cover").value = ""; fillShow();
+  } catch (e) { if (e.message !== "locked") $("#show-msg").textContent = e.message; }
+  finally { btn.disabled = false; }
+});
+$("#feed-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(pod.feedUrl); $("#feed-copy").textContent = "Copied"; }
+  catch { getSelection().selectAllChildren($("#feed-url")); $("#feed-copy").textContent = "Selected, press Ctrl+C"; }
+  setTimeout(() => { $("#feed-copy").textContent = "Copy"; }, 2500);
+});
+$("#pod-refresh").addEventListener("click", loadPodcast);
+function cover(key) { return key ? `<img alt="" src="${media(key)}" loading="lazy">` : `<div class="noimg" title="Uses the show cover"></div>`; }
+function renderDrafts() {
+  const box = $("#pod-drafts");
+  if (!pod.drafts.length) { box.innerHTML = `<p class="empty">No drafts. Tick “Add it to the podcast feed as a draft” on an output, and its episode shows up here after the render.</p>`; return; }
+  box.innerHTML = "";
+  for (const d of pod.drafts) {
+    const el = document.createElement("div");
+    el.className = "ep";
+    el.innerHTML = `${cover(d.image)}<div class="body">
+      <label>Episode title<input class="d-title" maxlength="200"></label>
+      <label>Episode description<textarea class="d-desc" rows="4" maxlength="4000"></textarea></label>
+      <audio controls preload="none" src="${media(d.audio)}"></audio>
+      <div class="meta"></div>
+      <div class="actions"><button type="button" class="link danger d-del">Delete draft</button><button type="button" class="primary d-pub">Publish to the feed</button></div></div>`;
+    $(".d-title", el).value = d.title || ""; $(".d-desc", el).value = d.description || "";
+    $(".meta", el).textContent = [mins(d.duration), size(d.bytes || 0), d.source ? `from ${d.source}` : "", d.created ? `made ${ago(d.created)}` : ""].filter(Boolean).join(" · ");
+    $(".d-pub", el).onclick = async () => {
+      const title = $(".d-title", el).value.trim();
+      if (!title) { podMsg("bad", "The episode needs a title."); return; }
+      $(".d-pub", el).disabled = true; $(".d-pub", el).textContent = "Publishing…";
+      try {
+        await podPost({ action: "publish", id: d.id, title, description: $(".d-desc", el).value });
+        podMsg("ok", `Published “${title}”. Podcast apps show it the next time they check the feed, usually within an hour.`);
+        loadPodcast();
+      } catch (e) { if (e.message !== "locked") podMsg("bad", e.message); $(".d-pub", el).disabled = false; $(".d-pub", el).textContent = "Publish to the feed"; }
+    };
+    $(".d-del", el).onclick = async () => {
+      const b = $(".d-del", el);
+      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Click again to delete"; setTimeout(() => { b.dataset.sure = ""; b.textContent = "Delete draft"; }, 4000); return; }
+      try { await podPost({ action: "delete", id: d.id }); loadPodcast(); } catch (e) { if (e.message !== "locked") podMsg("bad", e.message); }
+    };
+    box.append(el);
+  }
+}
+function renderEpisodes() {
+  const box = $("#pod-episodes");
+  if (!pod.episodes.length) { box.innerHTML = `<p class="empty">Nothing published yet.</p>`; return; }
+  box.innerHTML = "";
+  for (const e of [...pod.episodes].sort((a, b) => String(b.published).localeCompare(String(a.published)))) {
+    const el = document.createElement("div");
+    el.className = "ep small";
+    el.innerHTML = `${cover(e.image)}<div><div class="t"></div><div class="meta"></div></div>
+      <button type="button" class="link danger e-out">${e.imported ? "" : "Take out of the feed"}</button>`;
+    $(".t", el).textContent = e.title;
+    $(".meta", el).textContent = [new Date(e.published).toLocaleDateString(), mins(e.duration), e.imported ? "imported" : ""].filter(Boolean).join(" · ");
+    const out = $(".e-out", el);
+    if (e.imported) out.remove();
+    else out.onclick = async () => {
+      if (out.dataset.sure !== "1") { out.dataset.sure = "1"; out.textContent = "Click again: back to drafts"; setTimeout(() => { out.dataset.sure = ""; out.textContent = "Take out of the feed"; }, 4000); return; }
+      try { await podPost({ action: "unpublish", id: e.id }); podMsg("ok", `“${e.title}” is back in drafts.`); loadPodcast(); }
+      catch (err) { if (err.message !== "locked") podMsg("bad", err.message); }
+    };
+    box.append(el);
+  }
+}
+
 // ---------- finished notices: stay until closed (an auto-close setting can come later)
 const watch = (() => { try { return JSON.parse(localStorage.getItem("sp-watch")) || {}; } catch { return {}; } })();
 watch.ids = watch.ids || {};          // run id -> label, for runs seen queued or running
@@ -743,6 +922,7 @@ function checkFinished(runs) {
     notice({ ok, links, title: `${ok ? "Finished" : "Failed"}: ${r.label.replace(/^Render /, "")}`,
       text: ok ? "The videos are in the Output folder." : (r.conclusion === "cancelled" ? "The run was cancelled." : "Open Details to see what went wrong.") });
     delete watch.ids[id];
+    if (ok) loadPodcast();      // a finished run may have saved a podcast draft
     watch.done.push(id);
   }
   watch.done = watch.done.slice(-50);
@@ -802,7 +982,7 @@ fetch("/version.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null
 function start() {
   $("#gate").hidden = true; $("#app").hidden = false;
   if (!document.querySelector(".output")) addOutput({ name: "YouTube", podcast: true, graphic: true });
-  loadFiles(); loadRuns();
+  loadFiles().then(() => { if (pod) fillShow(); }); loadRuns(); loadPodcast();
 }
 // ---------- boot: with Cloudflare Access on and no passcode set, skip the passcode screen
 let needPasscode = true;

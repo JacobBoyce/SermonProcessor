@@ -105,3 +105,12 @@ Cloudflare may set the project up as a **Worker** instead of Pages. That works t
 After rendering, the worker sends a small audio-only copy of the main output (the podcast output if there is one) to Gemini and saves `<date> description.txt` and `.json` next to the videos in Output: a title and a summary of 5 sentences or less about the series and what this sermon teaches. A `.txt` with the video's name in Incoming is used instead, without calling Gemini. A description problem never fails the render.
 
 GitHub settings: secret `GEMINI_API_KEY` (required), variables `GEMINI_MODEL` (optional, default `gemini-3.8-flash`) and `DESCRIPTION_EXAMPLE` (optional: a past description whose style to copy). The church's default instructions for Gemini are in `prompts/instructions.txt`: edit that file on GitHub to change the default (the web app shows it greyed out after the next deploy). Ticking **Use custom instructions** in the web app replaces them for one sermon. `prompts/description.md` wraps them with the fixed parts (output format, notes).
+
+## Podcast feed (Phase 6)
+
+Tick **Add it to the podcast feed as a draft** on an output (with its podcast MP3 on). After the render, the worker saves a draft in the R2 bucket: the MP3, a square cover made from the video's thumbnail, and the description as the episode text. The web app's **Podcast** section lists drafts to edit and **Publish**, and the episodes already in the feed.
+
+- Public feed: `/podcast/feed.xml`; episode files: `/podcast/media/...` (both served from the bucket through the site's `PODCAST_BUCKET` binding). Everything else stays behind sign-in.
+- Show settings (name, description, author, owner email, cover, test flag) are edited in the Podcast section and stored in the bucket. A test feed carries `itunes:block` so directories don't list it.
+- GitHub settings for the worker: secrets `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`; variables `R2_ENDPOINT`, `R2_BUCKET`.
+- With Cloudflare Access on, `/podcast/` needs its own Access application with a **Bypass** policy, so podcast apps can read it.
