@@ -132,6 +132,13 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .ep.small img, .ep.small .noimg { width: 48px; }
 .ep.small .t { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
 button.danger { color: var(--bad); }
+.warn-line { margin: 0; font-size: .82rem; color: var(--warn); }
+.ep.next { grid-template-columns: 140px minmax(0, 1fr); }
+.cover-prev { width: 140px; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: var(--sunk); border: 1px solid var(--line);
+  display: grid; place-items: center; color: var(--muted); font-size: .75rem; text-align: center; padding: 6px; }
+.cover-prev img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#ne-player { width: 100%; height: 36px; }
+@media (max-width: 520px) { .ep.next { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { .ep { grid-template-columns: minmax(0, 1fr); } .ep.small { grid-template-columns: 48px minmax(0, 1fr); } }
 .sendbar { display: grid; gap: 10px; justify-items: end; }
 .sendbar .errors, .sendbar .notice { justify-self: stretch; }
@@ -248,6 +255,7 @@ footer.version a { color: inherit; }
 
         <section class="sendbar" aria-label="Send">
           <ul class="errors" id="errors"></ul>
+          <p class="warn-line" id="send-feed-warn" hidden>This render will replace the <b>Next episode</b> in the Podcast section below.</p>
           <button class="primary" type="button" id="send">Send to render</button>
           <div id="send-msg" class="notice" hidden></div>
         </section>
@@ -266,10 +274,10 @@ footer.version a { color: inherit; }
               <summary>Show settings</summary>
               <div class="stack" style="gap:10px; margin-top:12px">
                 <label for="show-title">Show name<input id="show-title" maxlength="200"></label>
-                <label for="show-desc">Show description<textarea id="show-desc" rows="3" maxlength="4000"></textarea></label>
+                <label for="show-desc">About the show (the podcast's own description, set once; each episode's description is below)<textarea id="show-desc" rows="3" maxlength="4000"></textarea></label>
                 <div class="row" style="gap:10px">
-                  <label for="show-author" style="flex:1 1 200px">Author (shown in podcast apps)<input id="show-author" maxlength="200"></label>
-                  <label for="show-email" style="flex:1 1 200px">Owner email (apps use it to verify ownership)<input id="show-email" type="email" maxlength="200"></label>
+                  <label for="show-author" style="flex:1 1 200px">Author (the name under the show in podcast apps)<input id="show-author" maxlength="200" placeholder="River Lake Church"></label>
+                  <label for="show-email" style="flex:1 1 200px">Owner email (Apple and Spotify send ownership codes here; it's public in the feed)<input id="show-email" type="email" maxlength="200" placeholder="A church address, not a personal one"></label>
                 </div>
                 <div class="row" style="gap:12px; align-items:end">
                   <div class="gprev" id="show-cover-prev" style="width:96px; aspect-ratio:1">None</div>
@@ -281,8 +289,32 @@ footer.version a { color: inherit; }
                 <div class="row spread"><span class="hint" id="show-msg"></span><button type="button" id="show-save">Save show settings</button></div>
               </div>
             </details>
-            <h3 class="subhead">Drafts</h3>
-            <div id="pod-drafts" class="stack" style="gap:12px"></div>
+            <h3 class="subhead">Next episode</h3>
+            <div class="ep next" id="next-ep">
+              <div class="stack" style="gap:6px">
+                <div class="cover-prev" id="ne-cover"></div>
+              </div>
+              <div class="body">
+                <p class="hint" id="ne-source"></p>
+                <label for="ne-audio">Audio
+                  <select id="ne-audio"></select>
+                </label>
+                <audio id="ne-player" controls preload="metadata"></audio>
+                <label for="ne-image">Episode image
+                  <select id="ne-image"></select>
+                </label>
+                <label for="ne-title">Episode title
+                  <input id="ne-title" maxlength="200" placeholder="Fills in after a render with “Add it to the podcast feed” ticked, or type your own">
+                </label>
+                <label for="ne-desc">Episode description
+                  <textarea id="ne-desc" rows="5" maxlength="4000" placeholder="Gemini's description fills in after a render with “Add it to the podcast feed” ticked, or type your own"></textarea>
+                </label>
+                <div class="actions">
+                  <button type="button" class="link danger" id="ne-clear" hidden>Clear the rendered episode</button>
+                  <button type="button" class="primary" id="ne-publish">Publish to the feed</button>
+                </div>
+              </div>
+            </div>
             <h3 class="subhead">In the feed</h3>
             <div id="pod-episodes" class="stack" style="gap:8px"></div>
           </div>
@@ -354,6 +386,7 @@ footer.version a { color: inherit; }
       <label class="check"><input type="checkbox" class="o-podcast"> Also make the podcast audio (MP3)</label>
       <label class="check"><input type="checkbox" class="o-feed"> Add it to the podcast feed as a draft</label>
     </div>
+    <p class="warn-line o-feed-warn" hidden>Rendering replaces the Podcast section's <b>Next episode</b>: its audio, image, title and description.</p>
   </div>
 </template>
 
@@ -601,8 +634,21 @@ function addOutput(preset = {}) {
   $(".o-name", card).value = preset.name || (n === 1 ? "YouTube" : `Output ${n}`);
   $(".o-podcast", card).checked = !!preset.podcast;
   $(".o-feed", card).checked = !!preset.feed;
-  const syncFeed = () => { const on = $(".o-podcast", card).checked; $(".o-feed", card).disabled = !on; if (!on) $(".o-feed", card).checked = false; };
-  $(".o-podcast", card).addEventListener("change", syncFeed); syncFeed();
+  const syncFeed = () => {
+    const on = $(".o-podcast", card).checked;
+    $(".o-feed", card).disabled = !on;
+    if (!on) $(".o-feed", card).checked = false;
+    $(".o-feed-warn", card).hidden = !$(".o-feed", card).checked;
+    validate();
+  };
+  $(".o-podcast", card).addEventListener("change", syncFeed);
+  $(".o-feed", card).addEventListener("change", () => {
+    if ($(".o-feed", card).checked) {        // the podcast has one next episode, so one output at a time
+      document.querySelectorAll(".o-feed").forEach((b) => { if (b !== $(".o-feed", card)) { b.checked = false; b.closest(".output").querySelector(".o-feed-warn").hidden = true; } });
+    }
+    syncFeed();
+  });
+  syncFeed();
   card.dataset.graphicAuto = preset.graphic ? "1" : "0";
   card.querySelectorAll("input,select").forEach((el, i) => { el.id = `o${n}-${i}`; });
   card.dataset.n = n;
@@ -717,6 +763,8 @@ function readOutputs() {
   return { outs, errs };
 }
 function validate() {
+  const sw = $("#send-feed-warn");
+  if (sw) sw.hidden = ![...document.querySelectorAll(".o-feed")].some((b) => b.checked);
   const { errs } = readOutputs();
   $("#errors").innerHTML = errs.map((e) => `<li>${esc(e)}</li>`).join("");
   $("#send").disabled = errs.length > 0;
@@ -798,7 +846,7 @@ async function loadPodcast() {
   $("#feed-url").textContent = pod.feedUrl;
   $("#feed-test").hidden = !pod.show.test;
   fillShow();
-  renderDrafts(); renderEpisodes();
+  renderNext(); renderEpisodes();
 }
 function fillShow() {
   const s = pod.show;
@@ -836,39 +884,74 @@ $("#feed-copy").addEventListener("click", async () => {
 });
 $("#pod-refresh").addEventListener("click", loadPodcast);
 function cover(key) { return key ? `<img alt="" src="${media(key)}" loading="lazy">` : `<div class="noimg" title="Uses the show cover"></div>`; }
-function renderDrafts() {
-  const box = $("#pod-drafts");
-  if (!pod.drafts.length) { box.innerHTML = `<p class="empty">No drafts. Tick “Add it to the podcast feed as a draft” on an output, and its episode shows up here after the render.</p>`; return; }
-  box.innerHTML = "";
-  for (const d of pod.drafts) {
-    const el = document.createElement("div");
-    el.className = "ep";
-    el.innerHTML = `${cover(d.image)}<div class="body">
-      <label>Episode title<input class="d-title" maxlength="200"></label>
-      <label>Episode description<textarea class="d-desc" rows="4" maxlength="4000"></textarea></label>
-      <audio controls preload="none" src="${media(d.audio)}"></audio>
-      <div class="meta"></div>
-      <div class="actions"><button type="button" class="link danger d-del">Delete draft</button><button type="button" class="primary d-pub">Publish to the feed</button></div></div>`;
-    $(".d-title", el).value = d.title || ""; $(".d-desc", el).value = d.description || "";
-    $(".meta", el).textContent = [mins(d.duration), size(d.bytes || 0), d.source ? `from ${d.source}` : "", d.created ? `made ${ago(d.created)}` : ""].filter(Boolean).join(" · ");
-    $(".d-pub", el).onclick = async () => {
-      const title = $(".d-title", el).value.trim();
-      if (!title) { podMsg("bad", "The episode needs a title."); return; }
-      $(".d-pub", el).disabled = true; $(".d-pub", el).textContent = "Publishing…";
-      try {
-        await podPost({ action: "publish", id: d.id, title, description: $(".d-desc", el).value });
-        podMsg("ok", `Published “${title}”. Podcast apps show it the next time they check the feed, usually within an hour.`);
-        loadPodcast();
-      } catch (e) { if (e.message !== "locked") podMsg("bad", e.message); $(".d-pub", el).disabled = false; $(".d-pub", el).textContent = "Publish to the feed"; }
-    };
-    $(".d-del", el).onclick = async () => {
-      const b = $(".d-del", el);
-      if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Click again to delete"; setTimeout(() => { b.dataset.sure = ""; b.textContent = "Delete draft"; }, 4000); return; }
-      try { await podPost({ action: "delete", id: d.id }); loadPodcast(); } catch (e) { if (e.message !== "locked") podMsg("bad", e.message); }
-    };
-    box.append(el);
+
+// Next episode: one slot. A render with "Add it to the podcast feed" fills it (and replaces
+// whatever was there); otherwise pick an MP3 and image from Drive and type the text.
+let neDraftId = null, neDuration = 0;
+function renderNext() {
+  const d = pod.draft;
+  const aSel = $("#ne-audio"), iSel = $("#ne-image");
+  const keepA = aSel.value, keepI = iSel.value;
+  aSel.innerHTML = (d ? `<option value="draft">From the latest render: ${esc(d.output || "episode")} (${mins(d.duration)})</option>` : `<option value="">Choose an MP3…</option>`) +
+    (files.audio?.length ? `<optgroup label="MP3s in Drive">${files.audio.map((a) => `<option value="${a.id}">${esc(a.path)}</option>`).join("")}</optgroup>` : "");
+  iSel.innerHTML = (d?.image ? `<option value="draft">From the latest render (the video's thumbnail, made square)</option>` : "") +
+    `<option value="">None (use the show cover)</option>` +
+    (files.thumbnails?.length ? `<optgroup label="Thumbnails">${files.thumbnails.map((t) => `<option value="${t.id}">${esc(t.path)}</option>`).join("")}</optgroup>` : "") +
+    (files.graphics?.length ? `<optgroup label="Graphics">${files.graphics.map((g) => `<option value="${g.id}">${esc(g.path)}</option>`).join("")}</optgroup>` : "");
+  const fresh = (d?.id || null) !== neDraftId;
+  if (fresh) {
+    // A new render replaces the form, as the warning by the checkbox says.
+    neDraftId = d?.id || null;
+    aSel.value = d ? "draft" : "";
+    iSel.value = d?.image ? "draft" : "";
+    $("#ne-title").value = d?.title || "";
+    $("#ne-desc").value = d?.description || "";
+  } else {
+    if ([...aSel.options].some((o) => o.value === keepA)) aSel.value = keepA;
+    if ([...iSel.options].some((o) => o.value === keepI)) iSel.value = keepI;
   }
+  $("#ne-source").textContent = d
+    ? `Rendered from ${d.source || "a video"}${d.created ? ` ${ago(d.created)}` : ""}. Edit anything below, then publish.`
+    : "Nothing rendered for the podcast yet. Render with “Add it to the podcast feed as a draft” ticked, or pick an MP3 from Drive below.";
+  $("#ne-clear").hidden = !d;
+  nePlayer(); neCover();
 }
+function nePlayer() {
+  const v = $("#ne-audio").value, p = $("#ne-player");
+  const src = v === "draft" ? media(pod.draft?.audio) : v ? `/api/video/${encodeURIComponent(v)}?k=${encodeURIComponent(passcode)}` : "";
+  neDuration = v === "draft" ? (pod.draft?.duration || 0) : 0;
+  if (p.dataset.src !== src) { p.dataset.src = src; if (src) p.src = src; else p.removeAttribute("src"); }
+  p.hidden = !src;
+}
+$("#ne-player").addEventListener("loadedmetadata", () => { if ($("#ne-audio").value !== "draft" && isFinite($("#ne-player").duration)) neDuration = $("#ne-player").duration; });
+function neCover() {
+  const v = $("#ne-image").value, box = $("#ne-cover");
+  const src = v === "draft" ? media(pod.draft?.image) : v ? img(v) : pod.show.image ? media(pod.show.image) : "";
+  box.innerHTML = src ? `<img alt="Episode image" src="${src}">` : "No image yet";
+}
+$("#ne-audio").addEventListener("change", nePlayer);
+$("#ne-image").addEventListener("change", neCover);
+$("#ne-publish").addEventListener("click", async () => {
+  const title = $("#ne-title").value.trim(), a = $("#ne-audio").value, i = $("#ne-image").value;
+  if (!a) { podMsg("bad", "Pick the episode's audio first."); return; }
+  if (!title) { podMsg("bad", "The episode needs a title."); $("#ne-title").focus(); return; }
+  const btn = $("#ne-publish"); btn.disabled = true; btn.textContent = a === "draft" ? "Publishing…" : "Copying from Drive and publishing…";
+  try {
+    const r = await podPost({ action: "publish", title, description: $("#ne-desc").value,
+      audio: a === "draft" ? "draft" : { driveId: a, duration: Math.round(neDuration) },
+      image: i === "draft" ? "draft" : i ? { driveId: i } : null });
+    podMsg(r.warning ? "bad" : "ok", `Published “${title}”. Podcast apps show it the next time they check the feed, usually within an hour.${r.warning ? " " + r.warning : ""}`);
+    neDraftId = "published";               // so the emptied form resets on reload
+    $("#ne-title").value = ""; $("#ne-desc").value = "";
+    loadPodcast();
+  } catch (e) { if (e.message !== "locked") podMsg("bad", e.message); }
+  finally { btn.disabled = false; btn.textContent = "Publish to the feed"; }
+});
+$("#ne-clear").addEventListener("click", async () => {
+  const b = $("#ne-clear");
+  if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Click again to delete the rendered audio"; setTimeout(() => { b.dataset.sure = ""; b.textContent = "Clear the rendered episode"; }, 4000); return; }
+  try { await podPost({ action: "clear" }); loadPodcast(); } catch (e) { if (e.message !== "locked") podMsg("bad", e.message); }
+});
 function renderEpisodes() {
   const box = $("#pod-episodes");
   if (!pod.episodes.length) { box.innerHTML = `<p class="empty">Nothing published yet.</p>`; return; }
@@ -883,8 +966,8 @@ function renderEpisodes() {
     const out = $(".e-out", el);
     if (e.imported) out.remove();
     else out.onclick = async () => {
-      if (out.dataset.sure !== "1") { out.dataset.sure = "1"; out.textContent = "Click again: back to drafts"; setTimeout(() => { out.dataset.sure = ""; out.textContent = "Take out of the feed"; }, 4000); return; }
-      try { await podPost({ action: "unpublish", id: e.id }); podMsg("ok", `“${e.title}” is back in drafts.`); loadPodcast(); }
+      if (out.dataset.sure !== "1") { out.dataset.sure = "1"; out.textContent = "Click again: remove and delete its audio"; setTimeout(() => { out.dataset.sure = ""; out.textContent = "Take out of the feed"; }, 4000); return; }
+      try { await podPost({ action: "remove", id: e.id }); podMsg("ok", `“${e.title}” was taken out of the feed and its audio deleted.`); loadPodcast(); }
       catch (err) { if (err.message !== "locked") podMsg("bad", err.message); }
     };
     box.append(el);
@@ -982,7 +1065,7 @@ fetch("/version.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null
 function start() {
   $("#gate").hidden = true; $("#app").hidden = false;
   if (!document.querySelector(".output")) addOutput({ name: "YouTube", podcast: true, graphic: true });
-  loadFiles().then(() => { if (pod) fillShow(); }); loadRuns(); loadPodcast();
+  loadFiles().then(() => { if (pod?.configured) { fillShow(); renderNext(); } }); loadRuns(); loadPodcast();
 }
 // ---------- boot: with Cloudflare Access on and no passcode set, skip the passcode screen
 let needPasscode = true;

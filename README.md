@@ -108,7 +108,7 @@ GitHub settings: secret `GEMINI_API_KEY` (required), variables `GEMINI_MODEL` (o
 
 ## Podcast feed (Phase 6)
 
-Tick **Add it to the podcast feed as a draft** on an output (with its podcast MP3 on). After the render, the worker saves a draft in the R2 bucket: the MP3, a square cover made from the video's thumbnail, and the description as the episode text. The web app's **Podcast** section lists drafts to edit and **Publish**, and the episodes already in the feed.
+The **Podcast** section has one **Next episode**: audio, image, title and description, then **Publish to the feed**. Tick **Add it to the podcast feed as a draft** on one output (with its podcast MP3 on) and, after the render, the worker fills the Next episode with the MP3, a square cover made from the video's thumbnail, and the description, replacing whatever was there. Or pick an MP3 (from Output or Incoming) and an image (Thumbnails or Graphics) from Drive and type the text; publishing copies them into the bucket. Taking an episode out of the feed deletes its audio.
 
 - Public feed: `/podcast/feed.xml`; episode files: `/podcast/media/...` (both served from the bucket through the site's `PODCAST_BUCKET` binding). Everything else stays behind sign-in.
 - Show settings (name, description, author, owner email, cover, test flag) are edited in the Podcast section and stored in the bucket. A test feed carries `itunes:block` so directories don't list it.

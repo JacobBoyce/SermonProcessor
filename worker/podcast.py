@@ -6,7 +6,8 @@ publishes them into the feed. Nothing here touches the public feed itself.
 Bucket layout (all under "podcast/"):
     podcast/audio/<id>.mp3        episode audio
     podcast/images/<id>.jpg       square episode cover (from the video's thumbnail)
-    podcast/drafts/<id>.json      draft details, until published
+    podcast/draft.json            the next episode waiting to be published (one at a time;
+                                  a new render replaces it)
     podcast/episodes.json         published episodes (written by the web app)
     podcast/show.json             show details (written by the web app)
 
@@ -100,6 +101,28 @@ def save_draft(mp3: Path, cover: Path | None, title: str, description: str, sour
         "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "run": os.environ.get("GITHUB_RUN_ID", ""),
     }
-    s3.put_object(Bucket=bucket, Key=f"podcast/drafts/{ep_id}.json", Body=json.dumps(draft, indent=2).encode(),
-                  ContentType="application/json")
+    _replace_draft(s3, bucket, draft)
     return draft
+
+
+def _replace_draft(s3, bucket: str, draft: dict) -> None:
+    """Make this the next episode. The previous draft's files are deleted unless that
+    episode was already published (then the feed still needs them)."""
+    old = _get_json(s3, bucket, "podcast/draft.json")
+    s3.put_object(Bucket=bucket, Key="podcast/draft.json", Body=json.dumps(draft, indent=2).encode(),
+                  ContentType="application/json")
+    if not old or old.get("id") == draft["id"]:
+        return
+    published = {e.get("id") for e in (_get_json(s3, bucket, "podcast/episodes.json") or [])}
+    if old.get("id") in published:
+        return
+    for key in (old.get("audio"), old.get("image")):
+        if key and key.startswith("podcast/") and key not in (draft.get("audio"), draft.get("image")):
+            s3.delete_object(Bucket=bucket, Key=key)
+
+
+def _get_json(s3, bucket: str, key: str):
+    try:
+        return json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
+    except Exception:   # noqa: BLE001 - missing or unreadable means "none"
+        return None

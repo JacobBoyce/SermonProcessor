@@ -321,7 +321,8 @@ def save_podcast_drafts(drive, folders: dict, rel_source: str, job: dict, writte
 
     Like the description, a problem here is reported but never fails the job.
     """
-    wanted = [o for o in job.get("outputs", []) if o.get("feed") and o.get("podcast")]
+    # One next episode at a time: the first output marked for the feed.
+    wanted = [o for o in job.get("outputs", []) if o.get("feed") and o.get("podcast")][:1]
     if not wanted:
         return
     print("\nPodcast drafts:")
@@ -340,7 +341,7 @@ def save_podcast_drafts(drive, folders: dict, rel_source: str, job: dict, writte
             draft = podcast.save_draft(mp3, cover, title or f"{prefix}{name}".strip(), body, rel_source, name, work)
             print(f"  {name}: draft saved ({draft['duration'] // 60} min, {draft['bytes'] / 1048576:.0f} MB)"
                   f"{'' if cover else ', no thumbnail found so the show cover will be used'}")
-            summary(f"\n**Podcast draft saved:** {draft['title']}. Publish it from the web app's Podcast section.")
+            summary(f"\n**Podcast next episode ready:** {draft['title']}. Review and publish it in the web app's Podcast section.")
     except Exception as exc:   # noqa: BLE001
         print(f"  Skipped: {exc}")
         summary(f"\n**Podcast draft skipped:** {exc}")
