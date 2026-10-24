@@ -133,6 +133,11 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .ep.small .t { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
 button.danger { color: var(--bad); }
 .warn-line { margin: 0; font-size: .82rem; color: var(--warn); }
+.rmark { color: var(--accent); font-weight: 700; font-size: .95em; margin-left: 2px; cursor: help; }
+.warn-line .rmark { margin: 0 2px 0 0; }
+.legend { margin: 0; }
+.cover-col { margin: 0; display: grid; gap: 6px; align-content: start; }
+.showset summary .hint { font-weight: 400; margin-left: 6px; }
 .ep.next { grid-template-columns: 140px minmax(0, 1fr); }
 .cover-prev { width: 140px; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: var(--sunk); border: 1px solid var(--line);
   display: grid; place-items: center; color: var(--muted); font-size: .75rem; text-align: center; padding: 6px; }
@@ -255,59 +260,35 @@ footer.version a { color: inherit; }
 
         <section class="sendbar" aria-label="Send">
           <ul class="errors" id="errors"></ul>
-          <p class="warn-line" id="send-feed-warn" hidden>This render will replace the <b>Next episode</b> in the Podcast section below.</p>
+          <p class="warn-line" id="send-feed-warn" hidden><span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> This render will replace the fields marked <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> in <b>Podcast episode</b> below.</p>
           <button class="primary" type="button" id="send">Send to render</button>
           <div id="send-msg" class="notice" hidden></div>
         </section>
 
         <section class="panel" id="podcast" aria-labelledby="h-pod">
-          <div class="row spread"><h2 id="h-pod">Podcast</h2><button type="button" id="pod-refresh">Refresh</button></div>
+          <div class="row spread"><h2 id="h-pod">Podcast episode</h2><button type="button" id="pod-refresh">Refresh</button></div>
           <div id="pod-msg" class="notice" hidden></div>
-          <div id="pod-body" hidden>
-            <div class="feedline">
-              <span class="hint">Feed address</span>
-              <code id="feed-url"></code>
-              <button type="button" id="feed-copy">Copy</button>
-              <span class="chip queued" id="feed-test" title="This feed asks podcast directories not to list it">Test feed</span>
-            </div>
-            <details class="showset" id="pod-show">
-              <summary>Show settings</summary>
-              <div class="stack" style="gap:10px; margin-top:12px">
-                <label for="show-title">Show name<input id="show-title" maxlength="200"></label>
-                <label for="show-desc">About the show (the podcast's own description, set once; each episode's description is below)<textarea id="show-desc" rows="3" maxlength="4000"></textarea></label>
-                <div class="row" style="gap:10px">
-                  <label for="show-author" style="flex:1 1 200px">Author (the name under the show in podcast apps)<input id="show-author" maxlength="200" placeholder="River Lake Church"></label>
-                  <label for="show-email" style="flex:1 1 200px">Owner email (Apple and Spotify send ownership codes here; it's public in the feed)<input id="show-email" type="email" maxlength="200" placeholder="A church address, not a personal one"></label>
-                </div>
-                <div class="row" style="gap:12px; align-items:end">
-                  <div class="gprev" id="show-cover-prev" style="width:96px; aspect-ratio:1">None</div>
-                  <label for="show-cover" style="flex:1 1 220px">Show cover (square, 1400–3000 px, from the Graphics folder)
-                    <select id="show-cover"></select>
-                  </label>
-                </div>
-                <label class="check"><input type="checkbox" id="show-test"> Test feed: ask podcast directories not to list it</label>
-                <div class="row spread"><span class="hint" id="show-msg"></span><button type="button" id="show-save">Save show settings</button></div>
-              </div>
-            </details>
-            <h3 class="subhead">Next episode</h3>
+          <div id="pod-body" class="stack" style="gap:14px" hidden>
             <div class="ep next" id="next-ep">
-              <div class="stack" style="gap:6px">
+              <figure class="cover-col">
                 <div class="cover-prev" id="ne-cover"></div>
-              </div>
+                <figcaption class="hint" id="ne-cover-cap"></figcaption>
+              </figure>
               <div class="body">
                 <p class="hint" id="ne-source"></p>
-                <label for="ne-audio">Audio
+                <p class="hint legend"><span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> Filled in by a render with “Add it to the podcast feed as a draft” ticked. You can still change these before publishing.</p>
+                <label for="ne-audio"><span>Audio <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
                   <select id="ne-audio"></select>
                 </label>
                 <audio id="ne-player" controls preload="metadata"></audio>
-                <label for="ne-image">Episode image
+                <label for="ne-image"><span>Episode image <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
                   <select id="ne-image"></select>
                 </label>
-                <label for="ne-title">Episode title
-                  <input id="ne-title" maxlength="200" placeholder="Fills in after a render with “Add it to the podcast feed” ticked, or type your own">
+                <label for="ne-title"><span>Episode title <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
+                  <input id="ne-title" maxlength="200" placeholder="Fills in after a render, or type your own">
                 </label>
-                <label for="ne-desc">Episode description
-                  <textarea id="ne-desc" rows="5" maxlength="4000" placeholder="Gemini's description fills in after a render with “Add it to the podcast feed” ticked, or type your own"></textarea>
+                <label for="ne-desc"><span>Episode description <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
+                  <textarea id="ne-desc" rows="5" maxlength="4000" placeholder="Gemini's description fills in after a render, or type your own"></textarea>
                 </label>
                 <div class="actions">
                   <button type="button" class="link danger" id="ne-clear" hidden>Clear the rendered episode</button>
@@ -315,8 +296,35 @@ footer.version a { color: inherit; }
                 </div>
               </div>
             </div>
-            <h3 class="subhead">In the feed</h3>
+
+            <h3 class="subhead">Episodes in the feed</h3>
             <div id="pod-episodes" class="stack" style="gap:8px"></div>
+
+            <details class="showset" id="pod-show">
+              <summary>Podcast channel settings <span class="hint">how the show itself appears on Spotify, Apple and other apps</span></summary>
+              <div class="stack" style="gap:12px; margin-top:12px">
+                <div class="feedline">
+                  <span class="hint">Feed address</span>
+                  <code id="feed-url"></code>
+                  <button type="button" id="feed-copy">Copy</button>
+                  <span class="chip queued" id="feed-test" title="This feed asks podcast directories not to list it">Test feed</span>
+                </div>
+                <label for="show-title">Show name<input id="show-title" maxlength="200"></label>
+                <label for="show-desc">About the show (the channel's description, not an episode's)<textarea id="show-desc" rows="3" maxlength="4000"></textarea></label>
+                <div class="row" style="gap:10px">
+                  <label for="show-author" style="flex:1 1 200px">Author (the name under the show in podcast apps)<input id="show-author" maxlength="200" placeholder="River Lake Church"></label>
+                  <label for="show-email" style="flex:1 1 200px">Owner email (Apple and Spotify send ownership codes here; it's public in the feed)<input id="show-email" type="email" maxlength="200" placeholder="A church address, not a personal one"></label>
+                </div>
+                <div class="row" style="gap:12px; align-items:end">
+                  <div class="gprev" id="show-cover-prev" style="width:96px; aspect-ratio:1">None</div>
+                  <label for="show-cover" style="flex:1 1 220px">Show cover (the channel's picture: square, 1400–3000 px, from the Graphics folder)
+                    <select id="show-cover"></select>
+                  </label>
+                </div>
+                <label class="check"><input type="checkbox" id="show-test"> Test feed: ask podcast directories not to list it</label>
+                <div class="row spread"><span class="hint" id="show-msg"></span><button type="button" id="show-save">Save channel settings</button></div>
+              </div>
+            </details>
           </div>
         </section>
       </div>
@@ -386,7 +394,7 @@ footer.version a { color: inherit; }
       <label class="check"><input type="checkbox" class="o-podcast"> Also make the podcast audio (MP3)</label>
       <label class="check"><input type="checkbox" class="o-feed"> Add it to the podcast feed as a draft</label>
     </div>
-    <p class="warn-line o-feed-warn" hidden>Rendering replaces the Podcast section's <b>Next episode</b>: its audio, image, title and description.</p>
+    <p class="warn-line o-feed-warn" hidden><span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> Rendering replaces the fields marked <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> in <b>Podcast episode</b> below: audio, episode image, title and description.</p>
   </div>
 </template>
 
@@ -872,6 +880,7 @@ $("#show-save").addEventListener("click", async () => {
       email: $("#show-email").value, test: $("#show-test").checked, coverId: $("#show-cover").value || undefined } });
     pod.show = r.show;
     $("#show-msg").textContent = r.warning || "Saved. Podcast apps pick up changes the next time they check the feed.";
+    neCover();
     $("#feed-test").hidden = !r.show.test;
     $("#show-cover").value = ""; fillShow();
   } catch (e) { if (e.message !== "locked") $("#show-msg").textContent = e.message; }
@@ -894,8 +903,8 @@ function renderNext() {
   const keepA = aSel.value, keepI = iSel.value;
   aSel.innerHTML = (d ? `<option value="draft">From the latest render: ${esc(d.output || "episode")} (${mins(d.duration)})</option>` : `<option value="">Choose an MP3…</option>`) +
     (files.audio?.length ? `<optgroup label="MP3s in Drive">${files.audio.map((a) => `<option value="${a.id}">${esc(a.path)}</option>`).join("")}</optgroup>` : "");
-  iSel.innerHTML = (d?.image ? `<option value="draft">From the latest render (the video's thumbnail, made square)</option>` : "") +
-    `<option value="">None (use the show cover)</option>` +
+  iSel.innerHTML = (d?.image ? `<option value="draft">The rendered video's thumbnail (made square)</option>` : "") +
+    `<option value="">Same picture as the show cover</option>` +
     (files.thumbnails?.length ? `<optgroup label="Thumbnails">${files.thumbnails.map((t) => `<option value="${t.id}">${esc(t.path)}</option>`).join("")}</optgroup>` : "") +
     (files.graphics?.length ? `<optgroup label="Graphics">${files.graphics.map((g) => `<option value="${g.id}">${esc(g.path)}</option>`).join("")}</optgroup>` : "");
   const fresh = (d?.id || null) !== neDraftId;
@@ -912,7 +921,7 @@ function renderNext() {
   }
   $("#ne-source").textContent = d
     ? `Rendered from ${d.source || "a video"}${d.created ? ` ${ago(d.created)}` : ""}. Edit anything below, then publish.`
-    : "Nothing rendered for the podcast yet. Render with “Add it to the podcast feed as a draft” ticked, or pick an MP3 from Drive below.";
+    : "Nothing rendered for the podcast yet. Render with “Add it to the podcast feed as a draft” ticked, or pick an MP3 from Drive and fill this in yourself.";
   $("#ne-clear").hidden = !d;
   nePlayer(); neCover();
 }
@@ -925,9 +934,13 @@ function nePlayer() {
 }
 $("#ne-player").addEventListener("loadedmetadata", () => { if ($("#ne-audio").value !== "draft" && isFinite($("#ne-player").duration)) neDuration = $("#ne-player").duration; });
 function neCover() {
+  // The preview shows exactly the picture this episode will get.
   const v = $("#ne-image").value, box = $("#ne-cover");
   const src = v === "draft" ? media(pod.draft?.image) : v ? img(v) : pod.show.image ? media(pod.show.image) : "";
-  box.innerHTML = src ? `<img alt="Episode image" src="${src}">` : "No image yet";
+  box.innerHTML = src ? `<img alt="Episode image" src="${src}">` : "No picture";
+  $("#ne-cover-cap").textContent = v === "draft" ? "The video's thumbnail"
+    : v ? "The picture you picked"
+    : pod.show.image ? "The show cover" : "No show cover set yet (see channel settings)";
 }
 $("#ne-audio").addEventListener("change", nePlayer);
 $("#ne-image").addEventListener("change", neCover);
