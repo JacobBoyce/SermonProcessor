@@ -128,6 +128,9 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .ep audio { width: 100%; height: 34px; }
 .ep .meta { font-size: .76rem; }
 .ep .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.eps-tools input { flex: 1 1 220px; }
+.eps-tools select { flex: 0 0 auto; }
+.ep .t { overflow-wrap: anywhere; }
 .ep.small { grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; padding: 8px 10px; }
 .ep.small img, .ep.small .noimg { width: 48px; }
 .ep.small .t { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
@@ -301,8 +304,21 @@ footer.version a { color: inherit; }
               </div>
             </div>
 
-            <h3 class="subhead">Episodes in the feed</h3>
-            <div id="pod-episodes" class="stack" style="gap:8px"></div>
+            <details class="showset" id="pod-eps">
+              <summary>Episodes in the feed <span class="hint" id="eps-sum"></span></summary>
+              <div class="stack" style="gap:10px;margin-top:12px">
+                <div class="row eps-tools">
+                  <input type="search" id="eps-q" placeholder="Search titles and descriptions" aria-label="Search episodes">
+                  <select id="eps-year" aria-label="Year"></select>
+                </div>
+                <div id="pod-episodes" class="stack" style="gap:8px"></div>
+                <div class="row spread">
+                  <button type="button" id="eps-more" hidden>Show more</button>
+                  <span class="hint" id="eps-count"></span>
+                </div>
+                <p class="hint eps-export">Backup: <a id="eps-csv" href="#">Download the episode list (CSV)</a> · <a href="/podcast/feed.xml" download="podcast-feed.xml">Download the feed (XML)</a>. The episodes' MP3s are also in Drive's Output folder.</p>
+              </div>
+            </details>
 
             <details class="showset" id="pod-show">
               <summary>Podcast channel settings <span class="hint">how the show itself appears on Spotify, Apple and other apps</span></summary>
@@ -986,11 +1002,27 @@ $("#ne-clear").addEventListener("click", async () => {
   if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Click again to delete the rendered audio"; setTimeout(() => { b.dataset.sure = ""; b.textContent = "Clear the rendered episode"; }, 4000); return; }
   try { await podPost({ action: "clear" }); loadPodcast(); } catch (e) { if (e.message !== "locked") podMsg("bad", e.message); }
 });
+// Newest first; closed by default. Search and a year filter, 10 at a time.
+const EPS_PAGE = 10;
+let epsShown = EPS_PAGE;
+const byDate = () => [...pod.episodes].sort((a, b) => String(b.published).localeCompare(String(a.published)));
+const yearOf = (e) => String(e.published || "").slice(0, 4);
 function renderEpisodes() {
+  const all = byDate();
+  const latest = all[0];
+  $("#eps-sum").textContent = all.length
+    ? `${all.length} · latest: ${latest.title} (${new Date(latest.published).toLocaleDateString()})` : "none yet";
+  const years = [...new Set(all.map(yearOf))].filter(Boolean);
+  const ySel = $("#eps-year"), keepY = ySel.value;
+  ySel.innerHTML = `<option value="">All years</option>` + years.map((y) => `<option>${y}</option>`).join("");
+  ySel.value = years.includes(keepY) ? keepY : "";
+  ySel.hidden = years.length < 2;
+  const q = $("#eps-q").value.trim().toLowerCase();
+  const list = all.filter((e) => (!ySel.value || yearOf(e) === ySel.value) &&
+    (!q || `${e.title}\n${e.description || ""}`.toLowerCase().includes(q)));
   const box = $("#pod-episodes");
-  if (!pod.episodes.length) { box.innerHTML = `<p class="empty">Nothing published yet.</p>`; return; }
-  box.innerHTML = "";
-  for (const e of [...pod.episodes].sort((a, b) => String(b.published).localeCompare(String(a.published)))) {
+  box.innerHTML = all.length ? (list.length ? "" : `<p class="empty">No episodes match.</p>`) : `<p class="empty">Nothing published yet.</p>`;
+  for (const e of list.slice(0, epsShown)) {
     const el = document.createElement("div");
     el.className = "ep small";
     el.innerHTML = `${cover(e.image)}<div><div class="t"></div><div class="meta"></div></div>
@@ -1006,7 +1038,24 @@ function renderEpisodes() {
     };
     box.append(el);
   }
+  $("#eps-more").hidden = list.length <= epsShown;
+  $("#eps-count").textContent = list.length && (q || ySel.value || list.length > epsShown)
+    ? `Showing ${Math.min(epsShown, list.length)} of ${list.length}${list.length !== all.length ? ` (of ${all.length} in the feed)` : ""}` : "";
 }
+$("#eps-q").addEventListener("input", () => { epsShown = EPS_PAGE; renderEpisodes(); });
+$("#eps-year").addEventListener("change", () => { epsShown = EPS_PAGE; renderEpisodes(); });
+$("#eps-more").addEventListener("click", () => { epsShown += EPS_PAGE; renderEpisodes(); });
+$("#eps-csv").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const origin = location.origin;
+  const rows = [["Published", "Title", "Description", "Minutes", "Audio", "Image", "ID"].map(cell).join(",")]
+    .concat(byDate().map((e) => [e.published, e.title, e.description, Math.round((e.duration || 0) / 60),
+      e.audioUrl || (e.audio ? origin + media(e.audio) : ""), e.imageUrl || (e.image ? origin + media(e.image) : ""), e.guid || e.id].map(cell).join(",")));
+  const url = URL.createObjectURL(new Blob(["\ufeff" + rows.join("\r\n")], { type: "text/csv" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: `podcast-episodes-${new Date().toISOString().slice(0, 10)}.csv` });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
 
 // ---------- finished notices: stay until closed (an auto-close setting can come later)
 const watch = (() => { try { return JSON.parse(localStorage.getItem("sp-watch")) || {}; } catch { return {}; } })();
