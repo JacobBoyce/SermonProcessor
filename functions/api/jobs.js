@@ -40,6 +40,8 @@ async function progressFor(env, runId) {
       pct: p.sp_pct === "" || p.sp_pct == null ? null : Number(p.sp_pct),
       eta: p.sp_eta === "" || p.sp_eta == null ? null : Number(p.sp_eta),
       at: p.sp_at ? Number(p.sp_at) * 1000 : null,
+      // What happened to the optional steps; a leading "!" marks a problem.
+      results: ["sp_r_desc", "sp_r_pod", "sp_r_yt"].map((k) => p[k]).filter(Boolean),
     };
   } catch {
     return null;   // progress is extra; never break the run list
@@ -50,7 +52,9 @@ export const onRequestGet = wrap(async ({ env }) => {
   const d = await github(env, `/actions/workflows/${WORKFLOW}/runs?per_page=10&event=workflow_dispatch`);
   const repo = env.GITHUB_REPO || "JacobBoyce/SermonProcessor";
   const runs = d.workflow_runs || [];
-  const live = await Promise.all(runs.map((r) => (r.status === "completed" ? null : progressFor(env, r.id))));
+  // Runs in flight, plus runs that finished in the last day (for their step results).
+  const recent = (r) => r.status !== "completed" || Date.now() - Date.parse(r.updated_at) < 86_400_000;
+  const live = await Promise.all(runs.map((r) => (recent(r) ? progressFor(env, r.id) : null)));
   return json({
     all: `https://github.com/${repo}/actions/workflows/${WORKFLOW}`,
     runs: runs.map((r, i) => ({

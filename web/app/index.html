@@ -133,6 +133,10 @@ kbd { font-family: var(--mono); font-size: .75rem; border: 1px solid var(--line)
 .ep.small .t { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
 button.danger { color: var(--bad); }
 .warn-line { margin: 0; font-size: .82rem; color: var(--warn); }
+.results { margin: 6px 0 0; padding: 0; list-style: none; font-size: .8rem; color: var(--muted); display: grid; gap: 2px; }
+.results li::before { content: "✓ "; color: var(--ok); }
+.results li.bad { color: var(--warn); }
+.results li.bad::before { content: "! "; color: var(--warn); font-weight: 700; }
 .rmark { color: var(--accent); font-weight: 700; font-size: .95em; margin-left: 2px; cursor: help; }
 .warn-line .rmark { margin: 0 2px 0 0; }
 .legend { margin: 0; }
@@ -820,8 +824,14 @@ function eta(sec) {
   const m = Math.round(sec / 60);
   return m < 60 ? `about ${m} min left` : `about ${Math.floor(m / 60)} h ${m % 60} min left`;
 }
+function resultsHtml(r) {
+  const res = r.progress?.results || [];
+  if (r.status !== "completed" || !res.length) return "";
+  return `<ul class="results">${res.map((t) => t.startsWith("!")
+    ? `<li class="bad">${esc(t.slice(1).trim())}</li>` : `<li>${esc(t)}</li>`).join("")}</ul>`;
+}
 function progressHtml(r) {
-  if (r.status === "completed") return "";
+  if (r.status === "completed") return resultsHtml(r);
   const p = r.progress;
   if (!p) return r.status === "in_progress" ? `<div class="prog">Starting up…</div><div class="bar" aria-hidden="true"><span style="width:2%"></span></div>` : "";
   const pct = p.pct ?? 0;
@@ -893,7 +903,16 @@ $("#feed-copy").addEventListener("click", async () => {
   catch { getSelection().selectAllChildren($("#feed-url")); $("#feed-copy").textContent = "Selected, press Ctrl+C"; }
   setTimeout(() => { $("#feed-copy").textContent = "Copy"; }, 2500);
 });
-$("#pod-refresh").addEventListener("click", loadPodcast);
+// Re-read Drive too, so MP3s and thumbnails made since the page opened can be picked.
+// Only the podcast pickers are updated, so a video being edited above isn't disturbed.
+async function refreshPodcast() {
+  try {
+    const f = await api("/api/files");
+    if (files) Object.assign(files, { audio: f.audio, thumbnails: f.thumbnails });
+  } catch (e) { /* the podcast part can still refresh */ }
+  await loadPodcast();
+}
+$("#pod-refresh").addEventListener("click", refreshPodcast);
 function cover(key) { return key ? `<img alt="" src="${media(key)}" loading="lazy">` : `<div class="noimg" title="Uses the show cover"></div>`; }
 
 // Next episode: one slot. A render with "Add it to the podcast feed" fills it (and replaces
@@ -1016,11 +1035,13 @@ function checkFinished(runs) {
     if (!(id in watch.ids)) continue;
     const ok = r.conclusion === "success";
     const links = [{ text: "Details", href: r.url }];
+    const problems = (r.progress?.results || []).filter((t) => t.startsWith("!")).map((t) => t.slice(1).trim());
     if (ok && files.outputFolder) links.unshift({ text: "Open Output folder", href: files.outputFolder });
     notice({ ok, links, title: `${ok ? "Finished" : "Failed"}: ${r.label.replace(/^Render /, "")}`,
-      text: ok ? "The videos are in the Output folder." : (r.conclusion === "cancelled" ? "The run was cancelled." : "Open Details to see what went wrong.") });
+      text: ok ? "The videos are in the Output folder." + (problems.length ? " But: " + problems.join(" · ") : "")
+        : (r.conclusion === "cancelled" ? "The run was cancelled." : "Open Details to see what went wrong.") });
     delete watch.ids[id];
-    if (ok) loadPodcast();      // a finished run may have saved a podcast draft
+    if (ok) refreshPodcast();   // new MP3s in Drive, and maybe a podcast draft
     watch.done.push(id);
   }
   watch.done = watch.done.slice(-50);

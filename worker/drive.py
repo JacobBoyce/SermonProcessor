@@ -267,6 +267,14 @@ class Drive:
         raise DriveError(f"Upload of {src.name} didn't finish")
 
     def set_properties(self, file_id: str, props: dict) -> None:
-        """Save small private labels on a file (Drive appProperties; not shown in Drive)."""
+        """Save small private labels on a file (Drive appProperties; not shown in Drive).
+
+        None removes a label. Drive allows 124 bytes per key plus value, so values are cut to fit.
+        """
+        def fit(k: str, v) -> str | None:
+            if v is None:
+                return None
+            room = 124 - len(k.encode())
+            return str(v).encode()[:room].decode(errors="ignore")
         self._request("PATCH", f"{API}/files/{file_id}", params={**COMMON, "fields": "id"},
-                      json={"appProperties": {k: str(v)[:100] for k, v in props.items()}}, timeout=30)
+                      json={"appProperties": {k: fit(k, v) for k, v in props.items()}}, timeout=30)

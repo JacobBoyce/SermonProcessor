@@ -138,14 +138,25 @@ class Progress:
         self.update("render", frac, f"Rendering {label}", eta)
 
     def finish(self, ok: bool, note: str = "") -> None:
+        # Clear old step results from an earlier run on the same video, then save this run's.
+        steps = {f"sp_r_{k}": RESULTS.get(k, "") for k in ("desc", "pod", "yt")}
         self._save({"sp_run": self.run, "sp_stage": note or ("Done" if ok else "Failed"),
-                    "sp_pct": "100" if ok else "", "sp_eta": "0" if ok else "", "sp_at": f"{time.time():.0f}"})
+                    "sp_pct": "100" if ok else "", "sp_eta": "0" if ok else "", "sp_at": f"{time.time():.0f}",
+                    **{k: (v or None) for k, v in steps.items()}})
 
     def _save(self, props: dict) -> None:
         try:
             self.drive.set_properties(self.file_id, props)
         except Exception as exc:   # noqa: BLE001 - progress is best-effort
             print(f"    (couldn't save progress: {exc})")
+
+
+# One line per optional step (description, podcast, YouTube), shown on the web app's run card.
+RESULTS: dict[str, str] = {}
+
+
+def result(step: str, text: str) -> None:
+    RESULTS[step] = text
 
 
 def mb(n: int) -> str:
@@ -311,10 +322,12 @@ def write_description(drive, folders: dict, rel_source: str, job: dict, written:
         print(f"  from {source} → {where}\n\n{title}\n\n{body}")
         summary(f"\n## Description ({'your file ' + source if own else source})\n\n**{title}**\n\n" +
                 body.replace("\n", "  \n"))
+        result("desc", f"Description written ({'your .txt' if own else 'Gemini'})")
         return title, body
     except Exception as exc:   # noqa: BLE001 - a description problem must never fail a finished render
         print(f"  Skipped: {exc}")
         summary(f"\n**Description skipped:** {exc}")
+        result("desc", f"! Description skipped: {exc}")
         return None
 
 
@@ -340,14 +353,17 @@ def save_podcast_drafts(drive, folders: dict, rel_source: str, job: dict, writte
             mp3 = next((f for f in written if f.suffix == ".mp3" and f.name == f"{prefix}{name}.mp3"), None)
             if mp3 is None:
                 print(f"  {name}: no podcast MP3 was made, so no draft")
+                result("pod", "! Podcast draft skipped: no MP3 was made")
                 continue
             draft = podcast.save_draft(mp3, cover, title or f"{prefix}{name}".strip(), body, rel_source, name, work)
             print(f"  {name}: draft saved ({draft['duration'] // 60} min, {draft['bytes'] / 1048576:.0f} MB)"
                   f"{'' if cover else ', no thumbnail found so the show cover will be used'}")
             summary(f"\n**Podcast next episode ready:** {draft['title']}. Review and publish it in the web app's Podcast section.")
+            result("pod", "Podcast next episode ready to review")
     except Exception as exc:   # noqa: BLE001
         print(f"  Skipped: {exc}")
         summary(f"\n**Podcast draft skipped:** {exc}")
+        result("pod", f"! Podcast draft skipped: {exc}")
 
 
 def upload_to_youtube(drive, folders: dict, rel_source: str, job: dict, written: list[Path],
@@ -365,6 +381,7 @@ def upload_to_youtube(drive, folders: dict, rel_source: str, job: dict, written:
     if missing:
         print("  Skipped: missing GitHub secrets " + ", ".join(missing))
         summary("\n**YouTube upload skipped:** missing GitHub secrets " + ", ".join(missing))
+        result("yt", "! YouTube skipped: missing GitHub secret " + ", ".join(missing))
         return
     label = str(job.get("prefix") or job.get("date") or "").strip()
     prefix = f"{label} " if label else ""
@@ -379,6 +396,7 @@ def upload_to_youtube(drive, folders: dict, rel_source: str, job: dict, written:
     except Exception as exc:   # noqa: BLE001
         print(f"  Skipped: {exc}")
         summary(f"\n**YouTube upload skipped:** {exc}")
+        result("yt", f"! YouTube skipped: {exc}")
         return
     total = sum(f.stat().st_size for o in wanted for f in written
                 if f.suffix == ".mp4" and f.name == f"{prefix}{render.safe_name(str(o.get('name') or ''))}.mp4") or 1
@@ -409,9 +427,11 @@ def upload_to_youtube(drive, folders: dict, rel_source: str, job: dict, written:
             link = youtube.studio_link(vid)
             print(f"  {name}: uploaded as private → {link}{note}")
             summary(f"\n**On YouTube (private):** [{video_title}]({link}){note}")
+            result("yt", f"On YouTube as private: {vid}" + (" (no thumbnail)" if note else ""))
         except Exception as exc:   # noqa: BLE001
             print(f"  {name}: upload failed: {exc}")
             summary(f"\n**YouTube upload failed for {name}:** {exc}")
+            result("yt", f"! YouTube upload failed: {exc}")
 
 
 def main() -> int:
