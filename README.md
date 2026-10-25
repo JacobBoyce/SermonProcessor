@@ -127,7 +127,7 @@ Tick **Upload to YouTube as a private video** on an output and, after the render
 
 ## Without a render: AI descriptions and single YouTube uploads (Phase 8)
 
-- **Write title and description with AI** (in the Podcast episode form and in the YouTube section) starts a short `describe` run on GitHub for the picked file: a Drive MP3 or video, or the rendered next episode's audio in the bucket. The worker writes the result to `ai/<request>.json` in the podcast bucket and the page fills in the fields when it appears (`GET /api/describe?id=`). Usually 2–4 minutes; the page picks it up again after a reload.
+- **Write one now, without rendering** (Description section) starts a short `describe` run on GitHub for the picked file: a Drive MP3 or video, or the rendered next episode's audio in the bucket. The worker writes the result to `ai/<request>.json` in the podcast bucket and the page shows it and, if ticked, fills in the podcast episode (orange ✱ fields) and/or the YouTube upload (purple ✱ fields) when it appears (`GET /api/describe?id=`). It uses the instructions box above it. Usually 2–4 minutes; the page picks it up again after a reload.
 - **YouTube upload, no editing** picks a video from Output or Incoming, a thumbnail (matched by name or date, or chosen), a title and description, and starts a `youtube` run that uploads it as private.
 - These runs don't wait behind a render: only renders share the one-at-a-time queue.
 - Job JSON: `describe` = `{"request": "<32 hex>", "media": {"driveId": "…"} | {"r2": "podcast/audio/<id>.mp3"}, "name": "…"}`; `youtube` = `{"video": "<Drive id>", "title": "…", "description": "…", "thumbnail": "<Drive id>" | null}`.

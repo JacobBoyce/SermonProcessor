@@ -10,7 +10,7 @@
 /* Layout: work column (video, outputs, send) beside a narrow recent-runs rail; stacks on phones. */
 :root {
   --bg: #f4f5f8; --surface: #ffffff; --sunk: #eef0f4; --fg: #1d2330; --muted: #5d6676; --line: #d8dce4;
-  --accent: #d9711c; --accent-fg: #ffffff; --ok: #1f8a5b; --warn: #a86400; --bad: #b4362f; --run: #2d6fb8;
+  --accent: #d9711c; --accent-fg: #ffffff; --ok: #1f8a5b; --warn: #a86400; --bad: #b4362f; --run: #2d6fb8; --yt: #7a4fd6;
   --sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --radius: 10px;
@@ -19,7 +19,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #12151b; --surface: #1a1f28; --sunk: #141820; --fg: #e8ebf1; --muted: #9aa3b2; --line: #2e3542;
-    --accent: #f09a4f; --accent-fg: #1a1208; --ok: #4cc48d; --warn: #e3a64a; --bad: #ee7a72; --run: #6fa8ec;
+    --accent: #f09a4f; --accent-fg: #1a1208; --ok: #4cc48d; --warn: #e3a64a; --bad: #ee7a72; --run: #6fa8ec; --yt: #b49cff;
     color-scheme: dark;
   }
 }
@@ -152,6 +152,8 @@ button.danger { color: var(--bad); }
 #yt-player { width: 100%; max-height: 300px; background: #000; border-radius: 8px; }
 .rmark { color: var(--accent); font-weight: 700; font-size: .95em; margin-left: 2px; cursor: help; }
 .warn-line .rmark { margin: 0 2px 0 0; }
+.rmark.yt { color: var(--yt); }
+.warn-line.yt { color: var(--yt); }
 .legend { margin: 0; }
 .cover-col { margin: 0; display: grid; gap: 6px; align-content: start; }
 .showset summary .hint { font-weight: 400; margin-left: 6px; }
@@ -273,11 +275,29 @@ footer.version a { color: inherit; }
             <p class="hint" id="instr-hint">These are the default instructions (prompts/instructions.txt on GitHub). Tick “Use custom instructions” to change them for this sermon only.</p>
           </div>
           <p class="hint" id="own-desc" hidden></p>
+          <details class="showset" id="dn">
+            <summary>Write one now, without rendering <span class="hint">for the podcast, YouTube, or both</span></summary>
+            <div class="stack" style="gap:10px;margin-top:12px">
+              <label for="dn-media">Describe this audio or video
+                <select id="dn-media"></select>
+              </label>
+              <label class="check"><input type="checkbox" id="dn-pod"> Fill in the podcast episode's title and description <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></label>
+              <label class="check"><input type="checkbox" id="dn-yt"> Fill in the YouTube upload's title and description <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></label>
+              <p class="warn-line" id="dn-pod-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the fields marked <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> in <b>Podcast episode</b> below.</p>
+              <p class="warn-line yt" id="dn-yt-warn" hidden><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Replaces the fields marked <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> in <b>YouTube upload, no editing</b> below.</p>
+              <div class="ai-row"><button type="button" id="dn-go">Write title and description with AI</button><span class="hint" id="dn-msg">Uses the instructions above. About 2–4 minutes.</span></div>
+              <div class="stack" id="dn-out" style="gap:6px" hidden>
+                <label for="dn-title">Title<input id="dn-title" readonly></label>
+                <label for="dn-desc">Description<textarea id="dn-desc" rows="5" readonly></textarea></label>
+                <div class="row" style="justify-content:flex-end"><button type="button" id="dn-copy">Copy both</button></div>
+              </div>
+            </div>
+          </details>
         </section>
 
         <section class="sendbar" aria-label="Send">
           <ul class="errors" id="errors"></ul>
-          <p class="warn-line" id="send-feed-warn" hidden><span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> This render will replace the fields marked <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> in <b>Podcast episode</b> below.</p>
+          <p class="warn-line" id="send-feed-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> This render will replace the fields marked <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> in <b>Podcast episode</b> below.</p>
           <button class="primary" type="button" id="send">Send to render</button>
           <div id="send-msg" class="notice" hidden></div>
         </section>
@@ -296,21 +316,20 @@ footer.version a { color: inherit; }
               </figure>
               <div class="body">
                 <p class="hint" id="ne-source"></p>
-                <p class="hint legend"><span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> Filled in by a render with “Add it to the podcast feed as a draft” ticked. You can still change these before publishing.</p>
-                <label for="ne-audio"><span>Audio <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
+                <p class="hint legend"><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Filled in by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description (Description section) with “Fill in the podcast episode” ticked. You can still change them before publishing.</p>
+                <label for="ne-audio"><span>Audio <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
                   <select id="ne-audio"></select>
                 </label>
                 <audio id="ne-player" controls preload="metadata"></audio>
-                <label for="ne-image"><span>Episode image <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
+                <label for="ne-image"><span>Episode image <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
                   <select id="ne-image"></select>
                 </label>
-                <label for="ne-title"><span>Episode title <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
+                <label for="ne-title"><span>Episode title <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
                   <input id="ne-title" maxlength="200" placeholder="Fills in after a render, or type your own">
                 </label>
-                <label for="ne-desc"><span>Episode description <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
+                <label for="ne-desc"><span>Episode description <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
                   <textarea id="ne-desc" rows="5" maxlength="4000" placeholder="Gemini's description fills in after a render, or type your own"></textarea>
                 </label>
-                <div class="ai-row"><button type="button" id="ne-ai">Write title and description with AI</button><span class="hint" id="ne-ai-msg">Uses the audio picked above.</span></div>
                 <div class="actions">
                   <button type="button" class="link danger" id="ne-clear" hidden>Clear the rendered episode</button>
                   <button type="button" class="primary" id="ne-publish">Publish to the feed</button>
@@ -380,9 +399,9 @@ footer.version a { color: inherit; }
                 <select id="yt-thumb"></select>
               </label>
             </div>
-            <label for="yt-title">Title<input id="yt-title" maxlength="100" placeholder="Type one, or write it with AI below"></label>
-            <label for="yt-desc">Description<textarea id="yt-desc" rows="5" maxlength="5000"></textarea></label>
-            <div class="ai-row"><button type="button" id="yt-ai">Write title and description with AI</button><span class="hint" id="yt-ai-msg">Uses the video picked above.</span></div>
+            <p class="hint legend"><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Filled in by an AI description (Description section) with “Fill in the YouTube upload” ticked. You can still change them.</p>
+            <label for="yt-title"><span>Title <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></span><input id="yt-title" maxlength="100" placeholder="Type one, or write it with AI below"></label>
+            <label for="yt-desc"><span>Description <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></span><textarea id="yt-desc" rows="5" maxlength="5000"></textarea></label>
             <div class="row" style="justify-content:flex-end;gap:10px">
               <span class="hint" id="yt-msg"></span>
               <button type="button" class="primary" id="yt-send">Upload to YouTube as private</button>
@@ -455,10 +474,10 @@ footer.version a { color: inherit; }
     </div>
     <div class="row" style="gap:18px">
       <label class="check"><input type="checkbox" class="o-podcast"> Also make the podcast audio (MP3)</label>
-      <label class="check"><input type="checkbox" class="o-feed"> Add it to the podcast feed as a draft</label>
-      <label class="check"><input type="checkbox" class="o-youtube"> Upload to YouTube as a private video</label>
+      <label class="check"><input type="checkbox" class="o-feed"> Add it to the podcast feed as a draft <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></label>
+      <label class="check"><input type="checkbox" class="o-youtube"> Upload to YouTube as a private video <span class="rmark yt" title="YouTube: this render uploads the video to YouTube as private" aria-label="YouTube">✱</span></label>
     </div>
-    <p class="warn-line o-feed-warn" hidden><span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> Rendering replaces the fields marked <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span> in <b>Podcast episode</b> below: audio, episode image, title and description.</p>
+    <p class="warn-line o-feed-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Rendering replaces the fields marked <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> in <b>Podcast episode</b> below: audio, episode image, title and description.</p>
   </div>
 </template>
 
@@ -651,7 +670,7 @@ function showVideo() {
   if (v.thumbnail) { t.className = "thumb"; t.innerHTML = `<img alt="Thumbnail ${esc(v.thumbnail.name)}" src="${img(v.thumbnail.id)}">`; }
   else { t.className = "thumb missing"; t.textContent = "No matching thumbnail. Add one to Thumbnails with the same name."; }
 }
-$("#video").addEventListener("change", () => { showVideo(); autoGraphics(); validate(); });
+$("#video").addEventListener("change", () => { showVideo(); autoGraphics(); validate(); renderDn(); });
 $("#refresh").addEventListener("click", loadFiles);
 
 // ---------- outputs
@@ -970,6 +989,7 @@ async function refreshPodcast() {
     if (files) Object.assign(files, { audio: f.audio, thumbnails: f.thumbnails, uploadable: f.uploadable });
     renderYt();
   } catch (e) { /* the podcast part can still refresh */ }
+  renderDn();
   await loadPodcast();
 }
 $("#pod-refresh").addEventListener("click", refreshPodcast);
@@ -1135,54 +1155,87 @@ for (const id of ["pod-fold", "yt-fold"]) {
   el.addEventListener("toggle", () => store.set("sp-open-" + id, el.open ? "1" : "0"));
 }
 
-// ---------- AI title and description for one file (no render): a short GitHub run,
-// then the result is picked up from /api/describe. Survives a page reload.
-function aiDescribe({ key, button, msg, media, name, title, desc }) {
+// ---------- AI title and description for one file (no render), in the Description section.
+// A short GitHub run; the result is picked up from /api/describe and survives a page reload.
+// It can fill the podcast episode form and/or the YouTube upload form.
+function dnSources() {
+  const out = [];
+  const v = currentVideo();
+  if (v) out.push({ group: "Picked above", id: "drive:" + v.id, label: `The video picked above: ${v.path}`, media: { driveId: v.id }, name: v.path });
+  if (pod?.draft?.audio) out.push({ group: "Podcast", id: "r2:" + pod.draft.audio, label: `The rendered next episode: ${pod.draft.output || "episode"}`, media: { r2: pod.draft.audio }, name: pod.draft.title || "podcast episode" });
+  for (const a of files.audio || []) out.push({ group: "MP3s in Drive", id: "drive:" + a.id, label: a.path, media: { driveId: a.id }, name: a.name });
+  for (const u of files.uploadable || []) if (!v || u.id !== v.id) out.push({ group: "Videos in Drive", id: "drive:" + u.id, label: `${u.path} (${size(u.size)})`, media: { driveId: u.id }, name: u.name });
+  return out;
+}
+function renderDn() {
+  const sel = $("#dn-media"), keep = sel.value, list = dnSources();
+  const groups = [...new Set(list.map((x) => x.group))];
+  sel.innerHTML = `<option value="">Choose…</option>` + groups.map((g) => `<optgroup label="${esc(g)}">${list.filter((x) => x.group === g)
+    .map((x) => `<option value="${esc(x.id)}">${esc(x.label)}</option>`).join("")}</optgroup>`).join("");
+  if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+}
+function dnWarn() { $("#dn-pod-warn").hidden = !$("#dn-pod").checked; $("#dn-yt-warn").hidden = !$("#dn-yt").checked; }
+$("#dn-pod").addEventListener("change", dnWarn);
+$("#dn-yt").addEventListener("change", dnWarn);
+$("#dn-copy").addEventListener("click", async () => {
+  const t = `${$("#dn-title").value}\n\n${$("#dn-desc").value}`;
+  try { await navigator.clipboard.writeText(t); $("#dn-copy").textContent = "Copied"; } catch { $("#dn-desc").select(); $("#dn-copy").textContent = "Selected, press Ctrl+C"; }
+  setTimeout(() => { $("#dn-copy").textContent = "Copy both"; }, 2500);
+});
+const dn = (() => {
+  const button = $("#dn-go"), msg = $("#dn-msg");
   const show = (t) => { msg.textContent = t; };
-  const finish = (data) => {
+  const TARGETS = { pod: ["#ne-title", "#ne-desc", "#pod-fold"], yt: ["#yt-title", "#yt-desc", "#yt-fold"] };
+  const finish = (data, targets) => {
     button.disabled = false;
-    store.del("sp-ai-" + key);
-    if (data.status === "done") {
-      const before = { t: title.value, d: desc.value };
-      title.value = data.title || title.value; desc.value = data.description || "";
-      title.dispatchEvent(new Event("input")); desc.dispatchEvent(new Event("input"));
-      msg.innerHTML = `Filled in by AI. Edit anything before using it. <button type="button" class="link">Undo</button>`;
-      $("button", msg).onclick = () => { title.value = before.t; desc.value = before.d; show("Put back what was there before."); };
-    } else show(`The AI description didn't work: ${data.error || "unknown problem"}. Open its run in Recent runs for details.`);
+    store.del("sp-ai-desc");
+    if (data.status !== "done") return show(`The AI description didn't work: ${data.error || "unknown problem"}. Open its run in Recent runs for details.`);
+    $("#dn-title").value = data.title || ""; $("#dn-desc").value = data.description || ""; $("#dn-out").hidden = false;
+    const before = {};
+    for (const k of targets) {
+      const [t, d, fold] = TARGETS[k];
+      before[k] = [$(t).value, $(d).value];
+      $(t).value = data.title || $(t).value; $(d).value = data.description || "";
+      $(fold).open = true;
+    }
+    const where = targets.map((k) => (k === "pod" ? "the podcast episode" : "the YouTube upload")).join(" and ");
+    if (!targets.length) return show("Done. Copy it from below.");
+    msg.innerHTML = `Done, and filled in ${where}. <button type="button" class="link">Undo</button>`;
+    $("button", msg).onclick = () => {
+      for (const k of targets) { const [t, d] = TARGETS[k]; [$(t).value, $(d).value] = before[k]; }
+      show(`Put back what was in ${where} before.`);
+    };
   };
-  const poll = async (request, started) => {
+  const poll = async (job) => {
     try {
-      const data = await api(`/api/describe?id=${request}`);
-      if (data.status === "done" || data.status === "error") return finish(data);
-      const m = Math.round((Date.now() - started) / 60000);
+      const data = await api(`/api/describe?id=${job.request}`);
+      if (data.status === "done" || data.status === "error") return finish(data, job.targets || []);
+      const m = Math.round((Date.now() - job.started) / 60000);
       show(data.status === "running" ? `Writing… (${m} min so far; usually 2–4 minutes)` : `Starting… (${m} min so far)`);
     } catch (e) { if (e.message === "locked") return; }
-    if (Date.now() - started > 30 * 60000) { button.disabled = false; store.del("sp-ai-" + key); return show("No answer after 30 minutes. Check Recent runs."); }
-    setTimeout(() => poll(request, started), 8000);
+    if (Date.now() - job.started > 30 * 60000) { button.disabled = false; store.del("sp-ai-desc"); return show("No answer after 30 minutes. Check Recent runs."); }
+    setTimeout(() => poll(job), 8000);
   };
-  const saved = (() => { try { return JSON.parse(store.get("sp-ai-" + key) || "null"); } catch { return null; } })();
-  const start = async () => {
-    const m = media();
-    if (!m) return show("Pick the audio or video first.");
-    if ((title.value.trim() || desc.value.trim()) && button.dataset.sure !== "1") {
-      button.dataset.sure = "1"; show("This replaces the title and description. Click again to go ahead.");
-      setTimeout(() => { button.dataset.sure = ""; }, 5000); return;
-    }
-    button.dataset.sure = ""; button.disabled = true; show("Sending…");
+  button.addEventListener("click", async () => {
+    const src = dnSources().find((x) => x.id === $("#dn-media").value);
+    if (!src) return show("Pick the audio or video first.");
+    if ($("#custom-instr").checked && !$("#instructions").value.trim()) return show("The custom instructions are empty.");
+    const targets = ["pod", "yt"].filter((k) => $(`#dn-${k}`).checked);
+    button.disabled = true; show("Sending…");
     try {
-      const r = await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "describe", job: { media: m, name: name() } }) });
-      const job = { request: r.request, started: Date.now() };
-      store.set("sp-ai-" + key, JSON.stringify(job));
-      watch.pending.push({ label: `AI description: ${name()}`.slice(0, 120), at: Date.now() }); saveWatch();
-      poll(job.request, job.started);
+      const instructions = $("#custom-instr").checked ? $("#instructions").value.trim() : "";
+      const r = await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "describe", job: { media: src.media, name: src.name, instructions } }) });
+      const job = { request: r.request, started: Date.now(), targets };
+      store.set("sp-ai-desc", JSON.stringify(job));
+      watch.pending.push({ label: `AI description: ${src.name}`.slice(0, 120), at: Date.now() }); saveWatch();
+      poll(job);
     } catch (e) { button.disabled = false; if (e.message !== "locked") show(e.message); }
-  };
-  button.addEventListener("click", start);
-  return { resume() { if (saved?.request && !button.disabled) { button.disabled = true; poll(saved.request, saved.started); } } };
-}
-const neAi = aiDescribe({ key: "pod", button: $("#ne-ai"), msg: $("#ne-ai-msg"), title: $("#ne-title"), desc: $("#ne-desc"),
-  media: () => { const v = $("#ne-audio").value; return v === "draft" ? (pod?.draft?.audio ? { r2: pod.draft.audio } : null) : v ? { driveId: v } : null; },
-  name: () => $("#ne-audio").selectedOptions[0]?.textContent.replace(/^From the latest render: /, "") || "podcast audio" });
+  });
+  return { resume() {
+    let job = null; try { job = JSON.parse(store.get("sp-ai-desc") || "null"); } catch {}
+    if (job?.request) { button.disabled = true; $("#dn").open = true; poll(job); }
+  } };
+})();
 
 // ---------- YouTube upload without editing
 function bestThumb(name) {
@@ -1219,9 +1272,6 @@ $("#yt-video").addEventListener("change", () => {
   ytPreview();
 });
 $("#yt-thumb").addEventListener("change", () => { ytAutoThumb = false; ytPreview(); });
-const ytAi = aiDescribe({ key: "yt", button: $("#yt-ai"), msg: $("#yt-ai-msg"), title: $("#yt-title"), desc: $("#yt-desc"),
-  media: () => $("#yt-video").value ? { driveId: $("#yt-video").value } : null,
-  name: () => (files.uploadable || []).find((x) => x.id === $("#yt-video").value)?.name || "video" });
 $("#yt-send").addEventListener("click", async () => {
   const id = $("#yt-video").value, title = $("#yt-title").value.trim(), btn = $("#yt-send");
   const v = (files.uploadable || []).find((x) => x.id === id);
@@ -1333,8 +1383,8 @@ fetch("/version.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null
 function start() {
   $("#gate").hidden = true; $("#app").hidden = false;
   if (!document.querySelector(".output")) addOutput({ name: "YouTube", podcast: true, graphic: true });
-  loadFiles().then(() => { if (pod?.configured) { fillShow(); renderNext(); } renderYt(); ytAi.resume(); }); loadRuns();
-  loadPodcast().then(() => neAi.resume());
+  loadFiles().then(() => { if (pod?.configured) { fillShow(); renderNext(); } renderYt(); renderDn(); }); loadRuns();
+  loadPodcast().then(() => { renderDn(); dn.resume(); });
 }
 // ---------- boot: with Cloudflare Access on and no passcode set, skip the passcode screen
 let needPasscode = true;
