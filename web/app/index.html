@@ -147,6 +147,7 @@ button.danger { color: var(--bad); }
 .panel.fold > details > summary::before { content: "▸"; color: var(--muted); font-size: .85rem; display: inline-block; transition: transform .15s; }
 .panel.fold > details[open] > summary::before { transform: rotate(90deg); }
 .panel.fold > details > .stack { padding: 0 18px 18px; }
+.legend .how { font-weight: 600; }
 .check.sub { margin-left: 28px; font-size: .85rem; }
 .ai-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .ai-row .hint { font-size: .8rem; }
@@ -286,8 +287,8 @@ footer.version a { color: inherit; }
               <label class="check sub" id="dn-pod-t-row" hidden><input type="checkbox" id="dn-pod-t"> Also fill in its title</label>
               <label class="check"><input type="checkbox" id="dn-yt"> Fill in the YouTube upload's description <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></label>
               <label class="check sub" id="dn-yt-t-row" hidden><input type="checkbox" id="dn-yt-t"> Also fill in its title</label>
-              <p class="warn-line" id="dn-pod-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the podcast episode's <span class="what">description</span> in <b>Podcast episode</b> below.</p>
-              <p class="warn-line yt" id="dn-yt-warn" hidden><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Replaces the <span class="what">description</span> in <b>YouTube upload, no editing</b> below.</p>
+              <p class="warn-line" id="dn-pod-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the podcast episode's <span class="what">description</span> in <b>Podcast episode</b> below.<span class="dn-clash" id="dn-pod-clash" hidden> A render with “Add it to the podcast feed as a draft” ticked will replace the audio, image, title and description again when it finishes.</span></p>
+              <p class="warn-line yt" id="dn-yt-warn" hidden><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Replaces the <span class="what">description</span> in <b>YouTube upload, no editing</b> below.<span class="dn-clash" id="dn-yt-clash" hidden> The render's own YouTube upload doesn't use these fields: it uses the render's description.</span></p>
               <div class="ai-row"><button type="button" id="dn-go">Write a description with AI</button><span class="hint" id="dn-msg">Uses the instructions above. About 2–4 minutes.</span></div>
               <div class="stack" id="dn-out" style="gap:6px" hidden>
                 <label for="dn-title">Suggested title<input id="dn-title" readonly></label>
@@ -319,7 +320,7 @@ footer.version a { color: inherit; }
               </figure>
               <div class="body">
                 <p class="hint" id="ne-source"></p>
-                <p class="hint legend"><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Filled in by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description (Description section) with “Fill in the podcast episode” ticked. You can still change them before publishing.</p>
+                <p class="hint legend" id="pod-legend"><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Filled in by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description (Description section) with “Fill in the podcast episode” ticked. You can still change them before publishing.</p>
                 <label for="ne-audio"><span>Audio <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
                   <select id="ne-audio"></select>
                 </label>
@@ -402,7 +403,7 @@ footer.version a { color: inherit; }
                 <select id="yt-thumb"></select>
               </label>
             </div>
-            <p class="hint legend"><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Filled in by an AI description (Description section) with “Fill in the YouTube upload” ticked. You can still change them.</p>
+            <p class="hint legend" id="yt-legend"><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Filled in by an AI description (Description section) with “Fill in the YouTube upload” ticked. You can still change them.</p>
             <label for="yt-title"><span>Title <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></span><input id="yt-title" maxlength="100" placeholder="Type one, or write it with AI below"></label>
             <label for="yt-desc"><span>Description <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></span><textarea id="yt-desc" rows="5" maxlength="5000"></textarea></label>
             <div class="row" style="justify-content:flex-end;gap:10px">
@@ -860,6 +861,7 @@ function readOutputs() {
 function validate() {
   const sw = $("#send-feed-warn");
   if (sw) sw.hidden = ![...document.querySelectorAll(".o-feed")].some((b) => b.checked);
+  if (typeof updateMarks === "function" && document.querySelector("#dn-pod")) updateMarks();
   const { errs } = readOutputs();
   $("#errors").innerHTML = errs.map((e) => `<li>${esc(e)}</li>`).join("");
   $("#send").disabled = errs.length > 0;
@@ -1185,8 +1187,33 @@ function dnWarn() {
     $(`#dn-${k}-warn`).hidden = !on;
     $(`#dn-${k}-warn .what`).textContent = $(`#dn-${k}-t`).checked ? "title and description" : "description";
   }
+  updateMarks();
 }
 for (const id of ["dn-pod", "dn-yt", "dn-pod-t", "dn-yt-t"]) $("#" + id).addEventListener("change", dnWarn);
+
+// ✱ markers on fields show only what the current ticks will replace. A render with
+// "Add it to the podcast feed" ticked replaces all four podcast fields and wins over the
+// description tool, since its result arrives later.
+function updateMarks() {
+  const renderPod = [...document.querySelectorAll(".o-feed")].some((b) => b.checked && !b.disabled);
+  const renderYt = [...document.querySelectorAll(".o-youtube")].some((b) => b.checked);
+  const dnPod = $("#dn-pod").checked, dnPodT = $("#dn-pod-t").checked;
+  const dnYt = $("#dn-yt").checked, dnYtT = $("#dn-yt-t").checked;
+  const mark = (forId, on) => { const m = document.querySelector(`label[for="${forId}"] .rmark`); if (m) m.hidden = !on; };
+  mark("ne-audio", renderPod); mark("ne-image", renderPod);
+  mark("ne-title", renderPod || (dnPod && dnPodT)); mark("ne-desc", renderPod || dnPod);
+  mark("yt-title", dnYt && dnYtT); mark("yt-desc", dnYt);
+  const pl = $("#pod-legend"), yl = $("#yt-legend");
+  pl.hidden = !(renderPod || dnPod); yl.hidden = !dnYt;
+  const pm = pl.querySelector(".rmark").outerHTML, ym = yl.querySelector(".rmark").outerHTML;
+  pl.innerHTML = pm + " " + (renderPod
+    ? `<span class="how">The render</span> (“Add it to the podcast feed as a draft” ticked) will replace the marked fields when it finishes.${dnPod ? " It wins over the AI description, since it finishes later." : ""}`
+    : `<span class="how">The AI description</span> (Description section) will replace the marked ${dnPodT ? "title and description" : "description"}.`) + " You can still change them before publishing.";
+  yl.innerHTML = ym + ` <span class="how">The AI description</span> (Description section) will replace the marked ${dnYtT ? "title and description" : "description"}. You can still change them.`;
+  $("#dn-pod-clash").hidden = !(dnPod && renderPod);
+  $("#dn-yt-clash").hidden = !(dnYt && renderYt);
+}
+document.addEventListener("change", (e) => { if (e.target.matches(".o-feed, .o-youtube, .o-podcast")) updateMarks(); });
 $("#dn-copy").addEventListener("click", async () => {
   const t = `${$("#dn-title").value}\n\n${$("#dn-desc").value}`;
   try { await navigator.clipboard.writeText(t); $("#dn-copy").textContent = "Copied"; } catch { $("#dn-desc").select(); $("#dn-copy").textContent = "Selected, press Ctrl+C"; }
