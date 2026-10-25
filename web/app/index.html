@@ -141,6 +141,15 @@ button.danger { color: var(--bad); }
 .results li::before { content: "✓ "; color: var(--ok); }
 .results li.bad { color: var(--warn); }
 .results li.bad::before { content: "! "; color: var(--warn); font-weight: 700; }
+.panel.fold { padding: 0; display: block; }
+.panel.fold > details > summary { list-style: none; cursor: pointer; padding: 16px 18px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.panel.fold > details > summary::-webkit-details-marker { display: none; }
+.panel.fold > details > summary::before { content: "▸"; color: var(--muted); font-size: .85rem; display: inline-block; transition: transform .15s; }
+.panel.fold > details[open] > summary::before { transform: rotate(90deg); }
+.panel.fold > details > .stack { padding: 0 18px 18px; }
+.ai-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ai-row .hint { font-size: .8rem; }
+#yt-player { width: 100%; max-height: 300px; background: #000; border-radius: 8px; }
 .rmark { color: var(--accent); font-weight: 700; font-size: .95em; margin-left: 2px; cursor: help; }
 .warn-line .rmark { margin: 0 2px 0 0; }
 .legend { margin: 0; }
@@ -273,8 +282,11 @@ footer.version a { color: inherit; }
           <div id="send-msg" class="notice" hidden></div>
         </section>
 
-        <section class="panel" id="podcast" aria-labelledby="h-pod">
-          <div class="row spread"><h2 id="h-pod">Podcast episode</h2><button type="button" id="pod-refresh">Refresh</button></div>
+        <section class="panel fold" id="podcast" aria-labelledby="h-pod">
+          <details id="pod-fold">
+          <summary><h2 id="h-pod">Podcast episode</h2><span class="hint" id="pod-sum"></span></summary>
+          <div class="stack" style="gap:14px">
+          <div class="row spread"><span class="hint">Review the next episode and publish it to the feed.</span><button type="button" id="pod-refresh">Refresh</button></div>
           <div id="pod-msg" class="notice" hidden></div>
           <div id="pod-body" class="stack" style="gap:14px" hidden>
             <div class="ep next" id="next-ep">
@@ -298,6 +310,7 @@ footer.version a { color: inherit; }
                 <label for="ne-desc"><span>Episode description <span class="rmark" title="Filled in by a render with “Add it to the podcast feed as a draft” ticked" aria-label="filled in by a render">✱</span></span>
                   <textarea id="ne-desc" rows="5" maxlength="4000" placeholder="Gemini's description fills in after a render, or type your own"></textarea>
                 </label>
+                <div class="ai-row"><button type="button" id="ne-ai">Write title and description with AI</button><span class="hint" id="ne-ai-msg">Uses the audio picked above.</span></div>
                 <div class="actions">
                   <button type="button" class="link danger" id="ne-clear" hidden>Clear the rendered episode</button>
                   <button type="button" class="primary" id="ne-publish">Publish to the feed</button>
@@ -348,7 +361,35 @@ footer.version a { color: inherit; }
               </div>
             </details>
           </div>
+                  </div>
+          </details>
         </section>
+
+        <section class="panel fold" id="ytsolo" aria-labelledby="h-yt">
+          <details id="yt-fold">
+          <summary><h2 id="h-yt">YouTube upload, no editing</h2><span class="hint">a finished video from Drive, uploaded as private</span></summary>
+          <div class="stack" style="gap:12px">
+            <p class="hint">Uploads a video that's already in Drive to the church channel as <b>private</b>. Nothing is public until someone makes it public in YouTube Studio.</p>
+            <label for="yt-video">Video
+              <select id="yt-video"></select>
+            </label>
+            <video id="yt-player" controls preload="metadata" hidden></video>
+            <div class="row" style="gap:12px;align-items:end">
+              <div class="gprev" id="yt-thumb-prev" style="width:160px;aspect-ratio:16/9">None</div>
+              <label for="yt-thumb" style="flex:1 1 220px">Thumbnail (from the Thumbnails folder)
+                <select id="yt-thumb"></select>
+              </label>
+            </div>
+            <label for="yt-title">Title<input id="yt-title" maxlength="100" placeholder="Type one, or write it with AI below"></label>
+            <label for="yt-desc">Description<textarea id="yt-desc" rows="5" maxlength="5000"></textarea></label>
+            <div class="ai-row"><button type="button" id="yt-ai">Write title and description with AI</button><span class="hint" id="yt-ai-msg">Uses the video picked above.</span></div>
+            <div class="row" style="justify-content:flex-end;gap:10px">
+              <span class="hint" id="yt-msg"></span>
+              <button type="button" class="primary" id="yt-send">Upload to YouTube as private</button>
+            </div>
+          </div>
+          </details>
+</section>
       </div>
 
       <aside class="panel" aria-labelledby="h-runs">
@@ -926,7 +967,8 @@ $("#feed-copy").addEventListener("click", async () => {
 async function refreshPodcast() {
   try {
     const f = await api("/api/files");
-    if (files) Object.assign(files, { audio: f.audio, thumbnails: f.thumbnails });
+    if (files) Object.assign(files, { audio: f.audio, thumbnails: f.thumbnails, uploadable: f.uploadable });
+    renderYt();
   } catch (e) { /* the podcast part can still refresh */ }
   await loadPodcast();
 }
@@ -962,6 +1004,10 @@ function renderNext() {
     ? `Rendered from ${d.source || "a video"}${d.created ? ` ${ago(d.created)}` : ""}. Edit anything below, then publish.`
     : "Nothing rendered for the podcast yet. Render with “Add it to the podcast feed as a draft” ticked, or pick an MP3 from Drive and fill this in yourself.";
   $("#ne-clear").hidden = !d;
+  $("#pod-sum").textContent = d ? "next episode ready to review" : "";
+  if (d && store.get("sp-seen-draft") !== d.id) {   // a render filled in a new episode: open the section once
+    store.set("sp-seen-draft", d.id); $("#pod-fold").open = true;
+  }
   nePlayer(); neCover();
 }
 function nePlayer() {
@@ -1082,6 +1128,116 @@ $("#eps-csv").addEventListener("click", (ev) => {
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
+// ---------- collapsible sections remember whether they were open
+for (const id of ["pod-fold", "yt-fold"]) {
+  const el = $("#" + id);
+  el.open = store.get("sp-open-" + id) === "1";
+  el.addEventListener("toggle", () => store.set("sp-open-" + id, el.open ? "1" : "0"));
+}
+
+// ---------- AI title and description for one file (no render): a short GitHub run,
+// then the result is picked up from /api/describe. Survives a page reload.
+function aiDescribe({ key, button, msg, media, name, title, desc }) {
+  const show = (t) => { msg.textContent = t; };
+  const finish = (data) => {
+    button.disabled = false;
+    store.del("sp-ai-" + key);
+    if (data.status === "done") {
+      const before = { t: title.value, d: desc.value };
+      title.value = data.title || title.value; desc.value = data.description || "";
+      title.dispatchEvent(new Event("input")); desc.dispatchEvent(new Event("input"));
+      msg.innerHTML = `Filled in by AI. Edit anything before using it. <button type="button" class="link">Undo</button>`;
+      $("button", msg).onclick = () => { title.value = before.t; desc.value = before.d; show("Put back what was there before."); };
+    } else show(`The AI description didn't work: ${data.error || "unknown problem"}. Open its run in Recent runs for details.`);
+  };
+  const poll = async (request, started) => {
+    try {
+      const data = await api(`/api/describe?id=${request}`);
+      if (data.status === "done" || data.status === "error") return finish(data);
+      const m = Math.round((Date.now() - started) / 60000);
+      show(data.status === "running" ? `Writing… (${m} min so far; usually 2–4 minutes)` : `Starting… (${m} min so far)`);
+    } catch (e) { if (e.message === "locked") return; }
+    if (Date.now() - started > 30 * 60000) { button.disabled = false; store.del("sp-ai-" + key); return show("No answer after 30 minutes. Check Recent runs."); }
+    setTimeout(() => poll(request, started), 8000);
+  };
+  const saved = (() => { try { return JSON.parse(store.get("sp-ai-" + key) || "null"); } catch { return null; } })();
+  const start = async () => {
+    const m = media();
+    if (!m) return show("Pick the audio or video first.");
+    if ((title.value.trim() || desc.value.trim()) && button.dataset.sure !== "1") {
+      button.dataset.sure = "1"; show("This replaces the title and description. Click again to go ahead.");
+      setTimeout(() => { button.dataset.sure = ""; }, 5000); return;
+    }
+    button.dataset.sure = ""; button.disabled = true; show("Sending…");
+    try {
+      const r = await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "describe", job: { media: m, name: name() } }) });
+      const job = { request: r.request, started: Date.now() };
+      store.set("sp-ai-" + key, JSON.stringify(job));
+      watch.pending.push({ label: `AI description: ${name()}`.slice(0, 120), at: Date.now() }); saveWatch();
+      poll(job.request, job.started);
+    } catch (e) { button.disabled = false; if (e.message !== "locked") show(e.message); }
+  };
+  button.addEventListener("click", start);
+  return { resume() { if (saved?.request && !button.disabled) { button.disabled = true; poll(saved.request, saved.started); } } };
+}
+const neAi = aiDescribe({ key: "pod", button: $("#ne-ai"), msg: $("#ne-ai-msg"), title: $("#ne-title"), desc: $("#ne-desc"),
+  media: () => { const v = $("#ne-audio").value; return v === "draft" ? (pod?.draft?.audio ? { r2: pod.draft.audio } : null) : v ? { driveId: v } : null; },
+  name: () => $("#ne-audio").selectedOptions[0]?.textContent.replace(/^From the latest render: /, "") || "podcast audio" });
+
+// ---------- YouTube upload without editing
+function bestThumb(name) {
+  const stem = name.replace(/\.[^.]+$/, "").toLowerCase(), date = (name.match(/^\d{4}-\d{2}-\d{2}/) || [])[0];
+  const list = files.thumbnails || [];
+  const same = list.find((t) => t.name.replace(/\.[^.]+$/, "").toLowerCase() === stem);
+  if (same) return same.id;
+  const byDate = date ? list.filter((t) => t.name.startsWith(date)) : [];
+  return byDate.length === 1 ? byDate[0].id : "";
+}
+let ytAutoThumb = true;
+function renderYt() {
+  const vSel = $("#yt-video"), tSel = $("#yt-thumb"), keepV = vSel.value, keepT = tSel.value;
+  const vids = files.uploadable || [];
+  const group = (where) => vids.filter((v) => v.path.startsWith(where + "/"));
+  vSel.innerHTML = `<option value="">Choose a video…</option>` + ["Output", "Incoming"].map((w) => group(w).length
+    ? `<optgroup label="${w}">${group(w).map((v) => `<option value="${v.id}">${esc(v.path.slice(w.length + 1))} (${size(v.size)})</option>`).join("")}</optgroup>` : "").join("");
+  if ([...vSel.options].some((o) => o.value === keepV)) vSel.value = keepV;
+  tSel.innerHTML = `<option value="">None (YouTube picks a frame)</option>` + (files.thumbnails || []).map((t) => `<option value="${t.id}">${esc(t.path)}</option>`).join("");
+  if ([...tSel.options].some((o) => o.value === keepT)) tSel.value = keepT;
+  ytPreview();
+}
+function ytPreview() {
+  const id = $("#yt-video").value, p = $("#yt-player");
+  const src = id ? `/api/video/${encodeURIComponent(id)}?k=${encodeURIComponent(passcode)}` : "";
+  p.hidden = !id;
+  if (p.dataset.src !== src) { p.dataset.src = src; if (src) p.src = src; else p.removeAttribute("src"); }
+  const t = $("#yt-thumb").value;
+  $("#yt-thumb-prev").innerHTML = t ? `<img alt="" src="${img(t)}" style="width:100%;height:100%;object-fit:cover">` : "None";
+}
+$("#yt-video").addEventListener("change", () => {
+  const v = (files.uploadable || []).find((x) => x.id === $("#yt-video").value);
+  if (v && ytAutoThumb) $("#yt-thumb").value = bestThumb(v.name);
+  ytPreview();
+});
+$("#yt-thumb").addEventListener("change", () => { ytAutoThumb = false; ytPreview(); });
+const ytAi = aiDescribe({ key: "yt", button: $("#yt-ai"), msg: $("#yt-ai-msg"), title: $("#yt-title"), desc: $("#yt-desc"),
+  media: () => $("#yt-video").value ? { driveId: $("#yt-video").value } : null,
+  name: () => (files.uploadable || []).find((x) => x.id === $("#yt-video").value)?.name || "video" });
+$("#yt-send").addEventListener("click", async () => {
+  const id = $("#yt-video").value, title = $("#yt-title").value.trim(), btn = $("#yt-send");
+  const v = (files.uploadable || []).find((x) => x.id === id);
+  if (!v) return ($("#yt-msg").textContent = "Pick a video first.");
+  if (!title) return ($("#yt-msg").textContent = "Give it a title first.");
+  btn.disabled = true; $("#yt-msg").textContent = "Sending…";
+  try {
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "youtube",
+      job: { video: id, name: v.name, title, description: $("#yt-desc").value, thumbnail: $("#yt-thumb").value || null } }) });
+    watch.pending.push({ label: `YouTube upload: ${v.name}`.slice(0, 120), at: Date.now() }); saveWatch();
+    $("#yt-msg").textContent = "Sent. It shows in Recent runs; when it finishes, the run links to the video in YouTube Studio.";
+    setTimeout(loadRuns, 4000);
+  } catch (e) { if (e.message !== "locked") $("#yt-msg").textContent = e.message; }
+  finally { btn.disabled = false; }
+});
+
 // ---------- finished notices: stay until closed (an auto-close setting can come later)
 const watch = (() => { try { return JSON.parse(localStorage.getItem("sp-watch")) || {}; } catch { return {}; } })();
 watch.ids = watch.ids || {};          // run id -> label, for runs seen queued or running
@@ -1110,9 +1266,11 @@ function checkFinished(runs) {
     const ok = r.conclusion === "success";
     const links = [{ text: "Details", href: r.url }];
     const problems = (r.progress?.results || []).filter((t) => t.startsWith("!")).map((t) => t.slice(1).trim());
-    if (ok && files.outputFolder) links.unshift({ text: "Open Output folder", href: files.outputFolder });
+    if (ok && files.outputFolder && r.label.startsWith("Render")) links.unshift({ text: "Open Output folder", href: files.outputFolder });
     notice({ ok, links, title: `${ok ? "Finished" : "Failed"}: ${r.label.replace(/^Render /, "")}`,
-      text: ok ? "The videos are in the Output folder." + (problems.length ? " But: " + problems.join(" · ") : "")
+      text: ok ? (r.label.startsWith("AI description:") ? "The title and description are filled in."
+        : r.label.startsWith("YouTube upload:") ? "It's on YouTube as private. Details links to it in YouTube Studio."
+        : "The videos are in the Output folder.") + (problems.length ? " But: " + problems.join(" · ") : "")
         : (r.conclusion === "cancelled" ? "The run was cancelled." : "Open Details to see what went wrong.") });
     delete watch.ids[id];
     if (ok) refreshPodcast();   // new MP3s in Drive, and maybe a podcast draft
@@ -1175,7 +1333,8 @@ fetch("/version.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null
 function start() {
   $("#gate").hidden = true; $("#app").hidden = false;
   if (!document.querySelector(".output")) addOutput({ name: "YouTube", podcast: true, graphic: true });
-  loadFiles().then(() => { if (pod?.configured) { fillShow(); renderNext(); } }); loadRuns(); loadPodcast();
+  loadFiles().then(() => { if (pod?.configured) { fillShow(); renderNext(); } renderYt(); ytAi.resume(); }); loadRuns();
+  loadPodcast().then(() => neAi.resume());
 }
 // ---------- boot: with Cloudflare Access on and no passcode set, skip the passcode screen
 let needPasscode = true;

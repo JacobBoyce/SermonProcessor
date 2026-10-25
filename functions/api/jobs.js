@@ -70,20 +70,46 @@ export const onRequestGet = wrap(async ({ env }) => {
   });
 });
 
+const HEX32 = () => [...crypto.getRandomValues(new Uint8Array(16))].map((x) => x.toString(16).padStart(2, "0")).join("");
+const DRIVE_ID = /^[\w-]{10,}$/;
+const cut = (v, n) => String(v ?? "").slice(0, n);
+
+// POST body: { action: "render" (default) | "describe" | "youtube", job, height?, label? }
 export const onRequestPost = wrap(async ({ env, request, data }) => {
   const body = await request.json().catch(() => null);
-  const job = body?.job;
-  if (!job || typeof job.source !== "string" || !Array.isArray(job.outputs) || !job.outputs.length) {
-    throw new AppError("The job needs a source video and at least one output");
+  const action = body?.action || "render";
+  let job = body?.job, label, height = "source", extra = {};
+  if (action === "render") {
+    if (!job || typeof job.source !== "string" || !Array.isArray(job.outputs) || !job.outputs.length) {
+      throw new AppError("The job needs a source video and at least one output");
+    }
+    height = body.height === "1080" ? "1080" : "source";
+    label = String(body.label || `Render ${job.source}`);
+  } else if (action === "describe") {
+    // An AI description of one file: an MP3 or video in Drive, or the rendered next episode's audio.
+    const m = job?.media || {};
+    const media = DRIVE_ID.test(String(m.driveId || "")) ? { driveId: m.driveId }
+      : /^podcast\/audio\/[0-9a-f]{32}\.mp3$/.test(String(m.r2 || "")) ? { r2: m.r2 } : null;
+    if (!media) throw new AppError("Pick the audio or video to describe");
+    const request = HEX32();
+    job = { request, media, name: cut(job.name, 200), notes: cut(job.notes, 2000), instructions: cut(job.instructions, 4000) };
+    label = `AI description: ${job.name || "file"}`;
+    extra = { request };
+  } else if (action === "youtube") {
+    if (!DRIVE_ID.test(String(job?.video || ""))) throw new AppError("Pick a video to upload");
+    job = { video: job.video, title: cut(job.title, 200), description: cut(job.description, 5000),
+      thumbnail: DRIVE_ID.test(String(job.thumbnail || "")) ? job.thumbnail : null, name: cut(job.name, 200) };
+    if (!job.title.trim()) throw new AppError("The video needs a title");
+    label = `YouTube upload: ${job.name || job.title}`;
+  } else {
+    throw new AppError("Unknown action");
   }
-  const height = body.height === "1080" ? "1080" : "source";
-  const label = String(body.label || `Render ${job.source}`).slice(0, 120);
   if (data?.user?.email) job.requestedBy = data.user.email;   // recorded in the run's job details
   const text = JSON.stringify(job);
   if (text.length > 60_000) throw new AppError("The job is too large");
   await github(env, `/actions/workflows/${WORKFLOW}/dispatches`, {
     method: "POST",
-    body: JSON.stringify({ ref: "main", inputs: { action: "render", job: text, output_height: height, label } }),
+    body: JSON.stringify({ ref: "main", inputs: { action, job: text, output_height: height, label: label.slice(0, 120) } }),
   });
-  return json({ ok: true });
+  return json({ ok: true, ...extra });
 });

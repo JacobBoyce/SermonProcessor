@@ -112,7 +112,9 @@ class Progress:
               "youtube": (0.91, 0.09)}
     EVERY = 15.0
 
-    def __init__(self, drive, file_id: str):
+    def __init__(self, drive, file_id: str, stages: dict | None = None):
+        if stages:
+            self.STAGES = stages
         self.drive, self.file_id = drive, file_id
         self.run = os.environ.get("GITHUB_RUN_ID", "local")
         self.last_write, self.last_stage = 0.0, ""
@@ -434,9 +436,111 @@ def upload_to_youtube(drive, folders: dict, rel_source: str, job: dict, written:
             result("yt", f"! YouTube upload failed: {exc}")
 
 
+# ---------------------------------------------------------------- standalone actions
+
+AI_RESULT = re.compile(r"^[0-9a-f]{32}$")
+
+
+def do_describe(drive, root_id: str, job: dict, work: Path) -> None:
+    """Write an AI description for one file (no editing) and save it for the web app.
+
+    job: {"request": <32 hex>, "media": {"driveId": ...} or {"r2": "podcast/audio/<id>.mp3"},
+          "name": shown name, "notes"?, "instructions"?}
+    The result goes to ai/<request>.json in the podcast bucket; the web app polls for it.
+    """
+    req = str(job.get("request") or "")
+    if not AI_RESULT.match(req):
+        raise render.JobError("The description request has no valid id")
+    missing = podcast.missing_settings()
+    if missing:
+        raise render.JobError("Missing GitHub settings for the podcast bucket: " + ", ".join(missing))
+    key = f"ai/{req}.json"
+    media = job.get("media") or {}
+    name = str(job.get("name") or "the file")
+    podcast.put_result(key, {"status": "running", "name": name, "at": time.time()})
+    prog = None
+    try:
+        if media.get("driveId"):
+            f = drive.get(str(media["driveId"]))
+            prog = Progress(drive, f.id, {"download": (0.0, 0.6), "describe": (0.6, 0.4)})
+            prog.update("download", 0, "Downloading for the description", force=True)
+            local = drive.download(f, work / "describe-src" / f.name, progress=lambda *_: None,
+                                   on_bytes=lambda d, n: prog.update("download", d / max(n, 1), "Downloading for the description"))
+        elif str(media.get("r2", "")).startswith("podcast/audio/"):
+            local = podcast.download(str(media["r2"]), work / "describe-src" / "episode.mp3")
+        else:
+            raise render.JobError("Pick the audio or video to describe")
+        print(f"Describing {name} ({mb(local.stat().st_size)})")
+        if prog:
+            prog.update("describe", 0, "Writing the description", 60, force=True)
+        title, body, data = describe.describe(local, work, str(job.get("notes") or ""),
+                                              str(job.get("instructions") or ""))
+        podcast.put_result(key, {"status": "done", "name": name, "title": title, "description": body, "at": time.time()})
+        print(f"\n{title}\n\n{body}")
+        summary(f"## AI description for {name}\n\n**{title}**\n\n" + body.replace("\n", "  \n"))
+        result("desc", "Description written (Gemini)")
+        if prog:
+            prog.finish(True)
+    except BaseException as exc:
+        try:
+            podcast.put_result(key, {"status": "error", "name": name, "error": str(exc)[:300], "at": time.time()})
+        except Exception:   # noqa: BLE001
+            pass
+        if prog:
+            result("desc", f"! Description failed: {exc}")
+            prog.finish(False)
+        raise
+
+
+def do_youtube(drive, root_id: str, job: dict, work: Path) -> None:
+    """Upload one video from Drive to YouTube as private (no editing).
+
+    job: {"video": <Drive id>, "title", "description", "thumbnail": <Drive id> or null}
+    """
+    missing = youtube.missing_settings()
+    if missing:
+        raise render.JobError("Missing GitHub secrets for YouTube: " + ", ".join(missing))
+    vid_id = str(job.get("video") or "")
+    if not vid_id:
+        raise render.JobError("Pick a video to upload")
+    f = drive.get(vid_id)
+    if PurePosixPath(f.name).suffix.lower() not in VIDEO_EXT and not f.mime.startswith("video/"):
+        raise render.JobError(f"“{f.name}” isn't a video")
+    title = str(job.get("title") or "").strip() or PurePosixPath(f.name).stem
+    body = str(job.get("description") or "").strip()
+    prog = Progress(drive, f.id, {"download": (0.0, 0.45), "youtube": (0.45, 0.55)})
+    try:
+        prog.update("download", 0, "Downloading the video", force=True)
+        local = drive.download(f, work / "yt" / f.name,
+                               on_bytes=lambda d, n: prog.update("download", d / max(n, 1), "Downloading the video"))
+        token = youtube._access_token()
+        print(f"\nUploading {f.name} ({mb(f.size)}) to YouTube as private")
+        vid = youtube.upload(local, title, body, token=token,
+                             on_bytes=lambda s, n: prog.update("youtube", s / max(n, 1), "Uploading to YouTube"))
+        local.unlink(missing_ok=True)
+        note = ""
+        thumb_id = str(job.get("thumbnail") or "")
+        if thumb_id:
+            try:
+                t = drive.get(thumb_id)
+                timg = drive.download(t, work / "yt-thumb" / t.name, progress=lambda *_: None)
+                youtube.set_thumbnail(vid, youtube.thumbnail_jpeg(timg, work / "yt-thumb" / "thumbnail.jpg"), token=token)
+            except Exception as exc:   # noqa: BLE001 - the video is up; a thumbnail problem is just reported
+                note = f" (thumbnail not set: {exc})"
+        link = youtube.studio_link(vid)
+        print(f"  uploaded as private → {link}{note}")
+        summary(f"\n**On YouTube (private):** [{title}]({link}){note}")
+        result("yt", f"On YouTube as private: {vid}" + (" (no thumbnail)" if note or not thumb_id else ""))
+        prog.finish(True)
+    except BaseException as exc:
+        result("yt", f"! YouTube upload failed: {exc}")
+        prog.finish(False)
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Process a sermon video from Google Drive.")
-    parser.add_argument("action", choices=["list", "render"])
+    parser.add_argument("action", choices=["list", "render", "describe", "youtube"])
     parser.add_argument("--job", default="", help="job JSON text, or a path to a job file")
     parser.add_argument("--height", default="", help="override output height: source or 1080")
     parser.add_argument("--work", type=Path, default=Path("work"))
@@ -456,11 +560,16 @@ def main() -> int:
             job = json.loads(Path(text).read_text()) if text.endswith(".json") and Path(text).is_file() \
                 else json.loads(text)
             args.work.mkdir(parents=True, exist_ok=True)
-            do_render(drive, root_id, job, args.work, args.height or None)
+            if args.action == "describe":
+                do_describe(drive, root_id, job, args.work)
+            elif args.action == "youtube":
+                do_youtube(drive, root_id, job, args.work)
+            else:
+                do_render(drive, root_id, job, args.work, args.height or None)
     except json.JSONDecodeError as exc:
         print(f"\nThe job isn't valid JSON: {exc}", file=sys.stderr)
         return 2
-    except (DriveError, render.JobError) as exc:
+    except (DriveError, render.JobError, youtube.YouTubeError, describe.DescribeError, podcast.PodcastError) as exc:
         print(f"\nProblem: {exc}", file=sys.stderr)
         summary(f"\n**Problem:** {exc}")
         return 2

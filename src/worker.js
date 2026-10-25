@@ -6,6 +6,7 @@ import * as jobs from "../functions/api/jobs.js";
 import * as image from "../functions/api/image/[id].js";
 import * as video from "../functions/api/video/[id].js";
 import * as podcastApi from "../functions/api/podcast.js";
+import * as describeApi from "../functions/api/describe.js";
 import * as feed from "../functions/podcast/feed.xml.js";
 import * as media from "../functions/podcast/media/[[path]].js";
 import { json } from "../lib/http.js";
@@ -23,6 +24,7 @@ function route(request, env, ctx) {
   if (vid && method === "GET") return video.onRequestGet({ ...base, params: { id: vid[1] } });
   if (pathname === "/api/podcast" && method === "GET") return podcastApi.onRequestGet(base);
   if (pathname === "/api/podcast" && method === "POST") return podcastApi.onRequestPost(base);
+  if (pathname === "/api/describe" && method === "GET") return describeApi.onRequestGet(base);
   return json({ error: "Not found" }, 404);
 }
 

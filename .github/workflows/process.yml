@@ -5,12 +5,12 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "list = check what's in Drive. render = cut a video from Incoming."
+        description: "list = check Drive. render = cut a video. describe = AI description of one file. youtube = upload one video as private."
         type: choice
-        options: ["list", "render"]
+        options: ["list", "render", "describe", "youtube"]
         default: "list"
       job:
-        description: "For render: the job JSON (see README)"
+        description: "For render, describe and youtube: the job JSON (see README)"
         required: false
         default: ""
       output_height:
@@ -23,8 +23,9 @@ on:
         required: false
         default: ""
 
+# Renders run one at a time; descriptions and single uploads don't wait behind them.
 concurrency:
-  group: process
+  group: ${{ inputs.action == 'render' && 'process' || format('process-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
@@ -55,14 +56,14 @@ jobs:
       # FFmpeg comes from a cached copy or a ready-made GitHub download, not Ubuntu's
       # package mirrors (which can hang for hours). A stall now fails within 10 minutes.
       - name: Restore cached FFmpeg
-        if: inputs.action == 'render'
+        if: inputs.action != 'list'
         uses: actions/cache@v4
         with:
           path: ~/ffmpeg-bin
           key: ffmpeg-static-v1-${{ runner.os }}
 
       - name: Install FFmpeg
-        if: inputs.action == 'render'
+        if: inputs.action != 'list'
         timeout-minutes: 10
         run: bash scripts/install-ffmpeg.sh
 

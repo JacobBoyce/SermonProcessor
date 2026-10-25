@@ -121,6 +121,21 @@ def _replace_draft(s3, bucket: str, draft: dict) -> None:
             s3.delete_object(Bucket=bucket, Key=key)
 
 
+def put_result(key: str, data: dict, client=None) -> None:
+    """Save a small JSON result (an AI description) for the web app to pick up."""
+    s3 = client or _client()
+    s3.put_object(Bucket=os.environ["R2_BUCKET"].strip(), Key=key, Body=json.dumps(data, indent=2).encode(),
+                  ContentType="application/json")
+
+
+def download(key: str, dest: Path, client=None) -> Path:
+    """Fetch a file from the bucket (the rendered next-episode audio)."""
+    s3 = client or _client()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    s3.download_file(os.environ["R2_BUCKET"].strip(), key, str(dest))
+    return dest
+
+
 def _get_json(s3, bucket: str, key: str):
     try:
         return json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
