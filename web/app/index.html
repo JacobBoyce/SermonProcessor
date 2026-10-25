@@ -147,6 +147,7 @@ button.danger { color: var(--bad); }
 .panel.fold > details > summary::before { content: "▸"; color: var(--muted); font-size: .85rem; display: inline-block; transition: transform .15s; }
 .panel.fold > details[open] > summary::before { transform: rotate(90deg); }
 .panel.fold > details > .stack { padding: 0 18px 18px; }
+.check.sub { margin-left: 28px; font-size: .85rem; }
 .ai-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .ai-row .hint { font-size: .8rem; }
 #yt-player { width: 100%; max-height: 300px; background: #000; border-radius: 8px; }
@@ -281,13 +282,15 @@ footer.version a { color: inherit; }
               <label for="dn-media">Describe this audio or video
                 <select id="dn-media"></select>
               </label>
-              <label class="check"><input type="checkbox" id="dn-pod"> Fill in the podcast episode's title and description <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></label>
-              <label class="check"><input type="checkbox" id="dn-yt"> Fill in the YouTube upload's title and description <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></label>
-              <p class="warn-line" id="dn-pod-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the fields marked <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> in <b>Podcast episode</b> below.</p>
-              <p class="warn-line yt" id="dn-yt-warn" hidden><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Replaces the fields marked <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> in <b>YouTube upload, no editing</b> below.</p>
-              <div class="ai-row"><button type="button" id="dn-go">Write title and description with AI</button><span class="hint" id="dn-msg">Uses the instructions above. About 2–4 minutes.</span></div>
+              <label class="check"><input type="checkbox" id="dn-pod"> Fill in the podcast episode's description <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></label>
+              <label class="check sub" id="dn-pod-t-row" hidden><input type="checkbox" id="dn-pod-t"> Also fill in its title</label>
+              <label class="check"><input type="checkbox" id="dn-yt"> Fill in the YouTube upload's description <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></label>
+              <label class="check sub" id="dn-yt-t-row" hidden><input type="checkbox" id="dn-yt-t"> Also fill in its title</label>
+              <p class="warn-line" id="dn-pod-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the podcast episode's <span class="what">description</span> in <b>Podcast episode</b> below.</p>
+              <p class="warn-line yt" id="dn-yt-warn" hidden><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Replaces the <span class="what">description</span> in <b>YouTube upload, no editing</b> below.</p>
+              <div class="ai-row"><button type="button" id="dn-go">Write a description with AI</button><span class="hint" id="dn-msg">Uses the instructions above. About 2–4 minutes.</span></div>
               <div class="stack" id="dn-out" style="gap:6px" hidden>
-                <label for="dn-title">Title<input id="dn-title" readonly></label>
+                <label for="dn-title">Suggested title<input id="dn-title" readonly></label>
                 <label for="dn-desc">Description<textarea id="dn-desc" rows="5" readonly></textarea></label>
                 <div class="row" style="justify-content:flex-end"><button type="button" id="dn-copy">Copy both</button></div>
               </div>
@@ -1174,9 +1177,16 @@ function renderDn() {
     .map((x) => `<option value="${esc(x.id)}">${esc(x.label)}</option>`).join("")}</optgroup>`).join("");
   if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
 }
-function dnWarn() { $("#dn-pod-warn").hidden = !$("#dn-pod").checked; $("#dn-yt-warn").hidden = !$("#dn-yt").checked; }
-$("#dn-pod").addEventListener("change", dnWarn);
-$("#dn-yt").addEventListener("change", dnWarn);
+function dnWarn() {
+  for (const k of ["pod", "yt"]) {
+    const on = $(`#dn-${k}`).checked;
+    $(`#dn-${k}-t-row`).hidden = !on;
+    if (!on) $(`#dn-${k}-t`).checked = false;
+    $(`#dn-${k}-warn`).hidden = !on;
+    $(`#dn-${k}-warn .what`).textContent = $(`#dn-${k}-t`).checked ? "title and description" : "description";
+  }
+}
+for (const id of ["dn-pod", "dn-yt", "dn-pod-t", "dn-yt-t"]) $("#" + id).addEventListener("change", dnWarn);
 $("#dn-copy").addEventListener("click", async () => {
   const t = `${$("#dn-title").value}\n\n${$("#dn-desc").value}`;
   try { await navigator.clipboard.writeText(t); $("#dn-copy").textContent = "Copied"; } catch { $("#dn-desc").select(); $("#dn-copy").textContent = "Selected, press Ctrl+C"; }
@@ -1192,24 +1202,27 @@ const dn = (() => {
     if (data.status !== "done") return show(`The AI description didn't work: ${data.error || "unknown problem"}. Open its run in Recent runs for details.`);
     $("#dn-title").value = data.title || ""; $("#dn-desc").value = data.description || ""; $("#dn-out").hidden = false;
     const before = {};
-    for (const k of targets) {
+    for (const { k, title } of targets) {
       const [t, d, fold] = TARGETS[k];
       before[k] = [$(t).value, $(d).value];
-      $(t).value = data.title || $(t).value; $(d).value = data.description || "";
+      if (title && data.title) $(t).value = data.title;
+      $(d).value = data.description || "";
       $(fold).open = true;
     }
-    const where = targets.map((k) => (k === "pod" ? "the podcast episode" : "the YouTube upload")).join(" and ");
+    const where = targets.map(({ k, title }) => `${k === "pod" ? "the podcast episode's" : "the YouTube upload's"} ${title ? "title and description" : "description"}`).join(" and ");
     if (!targets.length) return show("Done. Copy it from below.");
     msg.innerHTML = `Done, and filled in ${where}. <button type="button" class="link">Undo</button>`;
     $("button", msg).onclick = () => {
-      for (const k of targets) { const [t, d] = TARGETS[k]; [$(t).value, $(d).value] = before[k]; }
+      for (const { k } of targets) { const [t, d] = TARGETS[k]; [$(t).value, $(d).value] = before[k]; }
       show(`Put back what was in ${where} before.`);
     };
   };
   const poll = async (job) => {
     try {
       const data = await api(`/api/describe?id=${job.request}`);
-      if (data.status === "done" || data.status === "error") return finish(data, job.targets || []);
+      // Older saved jobs listed targets as plain names; those filled the title too.
+      const targets = (job.targets || []).map((t) => (typeof t === "string" ? { k: t, title: true } : t));
+      if (data.status === "done" || data.status === "error") return finish(data, targets);
       const m = Math.round((Date.now() - job.started) / 60000);
       show(data.status === "running" ? `Writing… (${m} min so far; usually 2–4 minutes)` : `Starting… (${m} min so far)`);
     } catch (e) { if (e.message === "locked") return; }
@@ -1220,7 +1233,7 @@ const dn = (() => {
     const src = dnSources().find((x) => x.id === $("#dn-media").value);
     if (!src) return show("Pick the audio or video first.");
     if ($("#custom-instr").checked && !$("#instructions").value.trim()) return show("The custom instructions are empty.");
-    const targets = ["pod", "yt"].filter((k) => $(`#dn-${k}`).checked);
+    const targets = ["pod", "yt"].filter((k) => $(`#dn-${k}`).checked).map((k) => ({ k, title: $(`#dn-${k}-t`).checked }));
     button.disabled = true; show("Sending…");
     try {
       const instructions = $("#custom-instr").checked ? $("#instructions").value.trim() : "";
