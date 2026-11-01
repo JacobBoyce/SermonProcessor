@@ -329,8 +329,9 @@ footer.version a { color: inherit; }
                 <audio id="ne-player" controls preload="metadata"></audio>
                 <div class="extract" id="ne-extract" hidden>
                   <p><b>This is a video.</b> Extract its audio for the podcast? It makes the podcast MP3 from the whole video (same sound settings as a render), saves a copy to Drive's Output folder, and fills in this episode.</p>
-                  <label class="check"><input type="checkbox" id="ne-x-ai" checked> Also write the title and description with AI</label>
-                  <p class="warn-line"><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the next episode's audio, image, title and description when it finishes (about 5–15 minutes, longer for a big 4K file).</p>
+                  <label class="check"><input type="checkbox" id="ne-x-title" checked> Write the title with AI</label>
+                  <label class="check"><input type="checkbox" id="ne-x-desc" checked> Write the description with AI</label>
+                  <p class="warn-line"><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the next episode's <span id="ne-x-what">audio, image, title and description</span> when it finishes (about 5–15 minutes, longer for a big 4K file).</p>
                   <div class="ai-row"><button type="button" class="primary" id="ne-x-go">Extract the audio</button><span class="hint" id="ne-x-msg"></span></div>
                 </div>
                 <label for="ne-image"><span>Episode image <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
@@ -1067,6 +1068,7 @@ function neCover() {
     : pod.show.image ? "The show cover" : "No show cover set yet (see channel settings)";
 }
 $("#ne-audio").addEventListener("change", nePlayer);
+for (const id of ["ne-x-title", "ne-x-desc"]) $("#" + id).addEventListener("change", updateMarks);
 $("#ne-x-go").addEventListener("click", async () => {
   const v = $("#ne-audio").value, btn = $("#ne-x-go"), msg = $("#ne-x-msg");
   if (!v.startsWith("video:")) return;
@@ -1081,7 +1083,7 @@ $("#ne-x-go").addEventListener("click", async () => {
   const thumbnail = pick && pick !== "draft" ? pick : bestThumb(vid.name) || null;
   try {
     await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "extract", job: {
-      video: vid.id, name: vid.path, thumbnail, describe: $("#ne-x-ai").checked,
+      video: vid.id, name: vid.path, thumbnail, aiTitle: $("#ne-x-title").checked, aiDescription: $("#ne-x-desc").checked,
       title: $("#ne-title").value, description: $("#ne-desc").value,
       instructions: $("#custom-instr").checked ? $("#instructions").value.trim() : "" } }) });
     watch.pending.push({ label: `Podcast audio: ${vid.name}`.slice(0, 120), at: Date.now() }); saveWatch();
@@ -1240,7 +1242,13 @@ function updateMarks() {
   const dnYt = $("#dn-yt").checked, dnYtT = $("#dn-yt-t").checked;
   const mark = (forId, on) => { const m = document.querySelector(`label[for="${forId}"] .rmark`); if (m) m.hidden = !on; };
   mark("ne-audio", renderPod); mark("ne-image", renderPod);
-  mark("ne-title", renderPod || (dnPod && dnPodT)); mark("ne-desc", renderPod || dnPod);
+  const extracting = $("#ne-audio").value.startsWith("video:");
+  const renderOnly = [...document.querySelectorAll(".o-feed")].some((b) => b.checked && !b.disabled);
+  // A render replaces all four; extracting replaces the title/description only when their AI ticks are on.
+  const xT = extracting && $("#ne-x-title").checked, xD = extracting && $("#ne-x-desc").checked;
+  mark("ne-title", renderOnly || xT || (dnPod && dnPodT)); mark("ne-desc", renderOnly || xD || dnPod);
+  const what = ["audio", "image"].concat(xT ? ["title"] : [], xD ? ["description"] : []);
+  $("#ne-x-what").textContent = what.length > 2 ? what.slice(0, -1).join(", ") + " and " + what.at(-1) : what.join(" and ");
   mark("yt-title", dnYt && dnYtT); mark("yt-desc", dnYt);
   const pl = $("#pod-legend"), yl = $("#yt-legend");
   pl.hidden = !(renderPod || dnPod); yl.hidden = !dnYt;

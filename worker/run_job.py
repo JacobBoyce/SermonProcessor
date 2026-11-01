@@ -496,7 +496,7 @@ def do_extract(drive, root_id: str, job: dict, work: Path) -> None:
     """Make the podcast MP3 from a whole video in Drive (no editing) and make it the next episode.
 
     job: {"video": <Drive id>, "name": shown path, "thumbnail": <Drive id> or null,
-          "describe": bool, "title", "description", "instructions"?}
+          "aiTitle": bool, "aiDescription": bool, "title", "description", "instructions"?}
     The MP3 is also saved to Drive's Output folder, next to the video (or mirroring its
     Incoming subfolders), as "<video name>.mp3".
     """
@@ -545,11 +545,16 @@ def do_extract(drive, root_id: str, job: dict, work: Path) -> None:
         summary(f"## Podcast audio from {shown}\n\nSaved **{where}** ({mb(mp3.stat().st_size)}).")
 
         title, body = str(job.get("title") or "").strip(), str(job.get("description") or "").strip()
-        if job.get("describe"):
+        want_title = bool(job.get("aiTitle", job.get("describe")))
+        want_body = bool(job.get("aiDescription", job.get("describe")))
+        if want_title or want_body:
             prog.update("describe", 0, "Writing the description", 60, force=True)
             try:
-                title, body, _ = describe.describe(mp3, work, "", str(job.get("instructions") or ""))
-                result("desc", "Description written (Gemini)")
+                ai_title, ai_body, _ = describe.describe(mp3, work, "", str(job.get("instructions") or ""))
+                title = ai_title if want_title else title
+                body = ai_body if want_body else body
+                what = "Title and description" if want_title and want_body else "Title" if want_title else "Description"
+                result("desc", f"{what} written (Gemini)")
                 summary(f"\n**{title}**\n\n" + body.replace("\n", "  \n"))
             except Exception as exc:   # noqa: BLE001 - the audio is ready; the text can be typed
                 print(f"  Description skipped: {exc}")

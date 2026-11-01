@@ -104,7 +104,7 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
   } else if (action === "extract") {
     // Podcast audio from a whole video in Drive, saved as the next episode.
     if (!DRIVE_ID.test(String(job?.video || ""))) throw new AppError("Pick a video to take the audio from");
-    job = { video: job.video, name: cut(job.name, 300), describe: Boolean(job.describe),
+    job = { video: job.video, name: cut(job.name, 300), aiTitle: Boolean(job.aiTitle), aiDescription: Boolean(job.aiDescription),
       thumbnail: DRIVE_ID.test(String(job.thumbnail || "")) ? job.thumbnail : null,
       title: cut(job.title, 200), description: cut(job.description, 4000), instructions: cut(job.instructions, 4000) };
     label = `Podcast audio: ${job.name.split("/").pop() || "video"}`;
