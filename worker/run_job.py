@@ -492,6 +492,88 @@ def do_describe(drive, root_id: str, job: dict, work: Path) -> None:
         raise
 
 
+def do_extract(drive, root_id: str, job: dict, work: Path) -> None:
+    """Make the podcast MP3 from a whole video in Drive (no editing) and make it the next episode.
+
+    job: {"video": <Drive id>, "name": shown path, "thumbnail": <Drive id> or null,
+          "describe": bool, "title", "description", "instructions"?}
+    The MP3 is also saved to Drive's Output folder, next to the video (or mirroring its
+    Incoming subfolders), as "<video name>.mp3".
+    """
+    missing = podcast.missing_settings()
+    if missing:
+        raise render.JobError("Missing GitHub settings for the podcast bucket: " + ", ".join(missing))
+    vid_id = str(job.get("video") or "")
+    if not vid_id:
+        raise render.JobError("Pick a video to take the audio from")
+    folders = top_folders(drive, root_id)
+    f = drive.get(vid_id)
+    if PurePosixPath(f.name).suffix.lower() not in VIDEO_EXT and not f.mime.startswith("video/"):
+        raise render.JobError(f"“{f.name}” isn't a video")
+    shown = str(job.get("name") or f.name)
+    stem = PurePosixPath(f.name).stem
+    prog = Progress(drive, f.id, {"download": (0.0, 0.45), "render": (0.45, 0.35), "upload": (0.8, 0.05),
+                                  "describe": (0.85, 0.15)})
+    try:
+        prog.update("download", 0, "Downloading the video", force=True)
+        local = drive.download(f, work / "extract" / f.name,
+                               on_bytes=lambda d, n: prog.update("download", d / max(n, 1), "Downloading the video"))
+        info = render.probe(local)
+        if not info.has_audio:
+            raise render.JobError(f"“{f.name}” has no sound, so there's nothing to make a podcast from")
+        mp3 = work / "extract" / f"{stem}.mp3"
+        out = render.Output(stem, [(0.0, info.duration)], None, True)
+        date = (DATE_RE.match(stem) or [None])[0] or ""
+        cmd, total = render.build_podcast_cmd(local, info, out, mp3, str(job.get("title") or stem), date)
+        print(f"Extracting the podcast audio from {shown} ({info.duration / 60:.0f} min)")
+        prog.update("render", 0, "Extracting the audio", force=True)
+        render.run_ffmpeg(cmd, total, "podcast audio",
+                          on_time=lambda t: prog.update("render", t / max(total, 1), "Extracting the audio"))
+        local.unlink(missing_ok=True)
+
+        # A copy in Drive's Output, beside the video or mirroring its Incoming folders.
+        prog.update("upload", 0, "Saving the MP3 to Drive", force=True)
+        rel_dir = str(PurePosixPath(shown).parent)
+        for top in ("Output/", "Incoming/"):
+            if rel_dir.startswith(top):
+                rel_dir = rel_dir[len(top):]
+        rel_dir = "" if rel_dir in (".", "Output", "Incoming") else rel_dir
+        out_folder = drive.ensure_folder(folders["Output"].id, rel_dir)
+        drive.upload(mp3, out_folder, progress=lambda *_: None)
+        where = f"Output/{rel_dir}/{mp3.name}" if rel_dir else f"Output/{mp3.name}"
+        print(f"  saved {where}")
+        summary(f"## Podcast audio from {shown}\n\nSaved **{where}** ({mb(mp3.stat().st_size)}).")
+
+        title, body = str(job.get("title") or "").strip(), str(job.get("description") or "").strip()
+        if job.get("describe"):
+            prog.update("describe", 0, "Writing the description", 60, force=True)
+            try:
+                title, body, _ = describe.describe(mp3, work, "", str(job.get("instructions") or ""))
+                result("desc", "Description written (Gemini)")
+                summary(f"\n**{title}**\n\n" + body.replace("\n", "  \n"))
+            except Exception as exc:   # noqa: BLE001 - the audio is ready; the text can be typed
+                print(f"  Description skipped: {exc}")
+                result("desc", f"! Description skipped: {exc}")
+
+        cover = None
+        thumb_id = str(job.get("thumbnail") or "")
+        if thumb_id:
+            try:
+                t = drive.get(thumb_id)
+                cover = drive.download(t, work / "extract" / "thumb" / t.name, progress=lambda *_: None)
+            except Exception as exc:   # noqa: BLE001
+                print(f"  Thumbnail skipped: {exc}")
+        draft = podcast.save_draft(mp3, cover, title or stem, body, shown, stem, work,
+                                   extra={"extracted": True})
+        result("pod", "Podcast next episode ready to review")
+        summary(f"\n**Podcast next episode ready:** {draft['title']}. Review and publish it in the web app's Podcast section.")
+        prog.finish(True)
+    except BaseException:
+        result("pod", "! Podcast audio failed: see Details")
+        prog.finish(False)
+        raise
+
+
 def do_youtube(drive, root_id: str, job: dict, work: Path) -> None:
     """Upload one video from Drive to YouTube as private (no editing).
 
@@ -540,7 +622,7 @@ def do_youtube(drive, root_id: str, job: dict, work: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Process a sermon video from Google Drive.")
-    parser.add_argument("action", choices=["list", "render", "describe", "youtube"])
+    parser.add_argument("action", choices=["list", "render", "describe", "youtube", "extract"])
     parser.add_argument("--job", default="", help="job JSON text, or a path to a job file")
     parser.add_argument("--height", default="", help="override output height: source or 1080")
     parser.add_argument("--work", type=Path, default=Path("work"))
@@ -564,6 +646,8 @@ def main() -> int:
                 do_describe(drive, root_id, job, args.work)
             elif args.action == "youtube":
                 do_youtube(drive, root_id, job, args.work)
+            elif args.action == "extract":
+                do_extract(drive, root_id, job, args.work)
             else:
                 do_render(drive, root_id, job, args.work, args.height or None)
     except json.JSONDecodeError as exc:

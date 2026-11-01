@@ -149,6 +149,8 @@ button.danger { color: var(--bad); }
 .panel.fold > details > .stack { padding: 0 18px 18px; }
 .legend .how { font-weight: 600; }
 .check.sub { margin-left: 28px; font-size: .85rem; }
+.extract { border: 1px dashed var(--accent); border-radius: 9px; padding: 12px; display: grid; gap: 8px; }
+.extract p { margin: 0; }
 .ai-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .ai-row .hint { font-size: .8rem; }
 #yt-player { width: 100%; max-height: 300px; background: #000; border-radius: 8px; }
@@ -325,6 +327,12 @@ footer.version a { color: inherit; }
                   <select id="ne-audio"></select>
                 </label>
                 <audio id="ne-player" controls preload="metadata"></audio>
+                <div class="extract" id="ne-extract" hidden>
+                  <p><b>This is a video.</b> Extract its audio for the podcast? It makes the podcast MP3 from the whole video (same sound settings as a render), saves a copy to Drive's Output folder, and fills in this episode.</p>
+                  <label class="check"><input type="checkbox" id="ne-x-ai" checked> Also write the title and description with AI</label>
+                  <p class="warn-line"><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the next episode's audio, image, title and description when it finishes (about 5–15 minutes, longer for a big 4K file).</p>
+                  <div class="ai-row"><button type="button" class="primary" id="ne-x-go">Extract the audio</button><span class="hint" id="ne-x-msg"></span></div>
+                </div>
                 <label for="ne-image"><span>Episode image <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
                   <select id="ne-image"></select>
                 </label>
@@ -1007,8 +1015,9 @@ function renderNext() {
   const d = pod.draft;
   const aSel = $("#ne-audio"), iSel = $("#ne-image");
   const keepA = aSel.value, keepI = iSel.value;
-  aSel.innerHTML = (d ? `<option value="draft">From the latest render: ${esc(d.output || "episode")} (${mins(d.duration)})</option>` : `<option value="">Choose an MP3…</option>`) +
-    (files.audio?.length ? `<optgroup label="MP3s in Drive">${files.audio.map((a) => `<option value="${a.id}">${esc(a.path)}</option>`).join("")}</optgroup>` : "");
+  aSel.innerHTML = (d ? `<option value="draft">${d.extracted ? "Extracted from the video" : "From the latest render"}: ${esc(d.output || "episode")} (${mins(d.duration)})</option>` : `<option value="">Choose an MP3…</option>`) +
+    (files.audio?.length ? `<optgroup label="MP3s in Drive">${files.audio.map((a) => `<option value="${a.id}">${esc(a.path)}</option>`).join("")}</optgroup>` : "") +
+    (files.uploadable?.length ? `<optgroup label="Videos in Drive (extract the audio)">${files.uploadable.map((v) => `<option value="video:${v.id}">${esc(v.path)} (${size(v.size)})</option>`).join("")}</optgroup>` : "");
   iSel.innerHTML = (d?.image ? `<option value="draft">The rendered video's thumbnail (made square)</option>` : "") +
     `<option value="">Same picture as the show cover</option>` +
     (files.thumbnails?.length ? `<optgroup label="Thumbnails">${files.thumbnails.map((t) => `<option value="${t.id}">${esc(t.path)}</option>`).join("")}</optgroup>` : "") +
@@ -1026,7 +1035,7 @@ function renderNext() {
     if ([...iSel.options].some((o) => o.value === keepI)) iSel.value = keepI;
   }
   $("#ne-source").textContent = d
-    ? `Rendered from ${d.source || "a video"}${d.created ? ` ${ago(d.created)}` : ""}. Edit anything below, then publish.`
+    ? `${d.extracted ? "Audio extracted from" : "Rendered from"} ${d.source || "a video"}${d.created ? ` ${ago(d.created)}` : ""}. Edit anything below, then publish.`
     : "Nothing rendered for the podcast yet. Render with “Add it to the podcast feed as a draft” ticked, or pick an MP3 from Drive and fill this in yourself.";
   $("#ne-clear").hidden = !d;
   $("#pod-sum").textContent = d ? "next episode ready to review" : "";
@@ -1036,13 +1045,18 @@ function renderNext() {
   nePlayer(); neCover();
 }
 function nePlayer() {
-  const v = $("#ne-audio").value, p = $("#ne-player");
-  const src = v === "draft" ? media(pod.draft?.audio) : v ? `/api/video/${encodeURIComponent(v)}?k=${encodeURIComponent(passcode)}` : "";
+  const v = $("#ne-audio").value, p = $("#ne-player"), isVideo = v.startsWith("video:");
+  const id = isVideo ? v.slice(6) : v;
+  const src = v === "draft" ? media(pod.draft?.audio) : id ? `/api/video/${encodeURIComponent(id)}?k=${encodeURIComponent(passcode)}` : "";
+  $("#ne-extract").hidden = !isVideo;
+  $("#ne-publish").disabled = isVideo;
+  $("#ne-publish").title = isVideo ? "Extract the audio first" : "";
+  if (typeof updateMarks === "function") updateMarks();
   neDuration = v === "draft" ? (pod.draft?.duration || 0) : 0;
   if (p.dataset.src !== src) { p.dataset.src = src; if (src) p.src = src; else p.removeAttribute("src"); }
   p.hidden = !src;
 }
-$("#ne-player").addEventListener("loadedmetadata", () => { if ($("#ne-audio").value !== "draft" && isFinite($("#ne-player").duration)) neDuration = $("#ne-player").duration; });
+$("#ne-player").addEventListener("loadedmetadata", () => { if ($("#ne-audio").value !== "draft" && !$("#ne-audio").value.startsWith("video:") && isFinite($("#ne-player").duration)) neDuration = $("#ne-player").duration; });
 function neCover() {
   // The preview shows exactly the picture this episode will get.
   const v = $("#ne-image").value, box = $("#ne-cover");
@@ -1053,6 +1067,29 @@ function neCover() {
     : pod.show.image ? "The show cover" : "No show cover set yet (see channel settings)";
 }
 $("#ne-audio").addEventListener("change", nePlayer);
+$("#ne-x-go").addEventListener("click", async () => {
+  const v = $("#ne-audio").value, btn = $("#ne-x-go"), msg = $("#ne-x-msg");
+  if (!v.startsWith("video:")) return;
+  const vid = (files.uploadable || []).find((x) => x.id === v.slice(6));
+  if (!vid) { msg.textContent = "That video isn't in Drive any more. Press Refresh."; return; }
+  if (btn.dataset.sure !== "1" && pod?.draft) {
+    btn.dataset.sure = "1"; msg.textContent = "A rendered episode is waiting and will be replaced. Click again to go ahead.";
+    setTimeout(() => { btn.dataset.sure = ""; }, 5000); return;
+  }
+  btn.dataset.sure = ""; btn.disabled = true; msg.textContent = "Sending…";
+  const pick = $("#ne-image").value;
+  const thumbnail = pick && pick !== "draft" ? pick : bestThumb(vid.name) || null;
+  try {
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "extract", job: {
+      video: vid.id, name: vid.path, thumbnail, describe: $("#ne-x-ai").checked,
+      title: $("#ne-title").value, description: $("#ne-desc").value,
+      instructions: $("#custom-instr").checked ? $("#instructions").value.trim() : "" } }) });
+    watch.pending.push({ label: `Podcast audio: ${vid.name}`.slice(0, 120), at: Date.now() }); saveWatch();
+    msg.textContent = "Extracting. It shows in Recent runs, and this episode fills in when it's done.";
+    setTimeout(loadRuns, 4000);
+  } catch (e) { if (e.message !== "locked") msg.textContent = e.message; }
+  finally { btn.disabled = false; }
+});
 $("#ne-image").addEventListener("change", neCover);
 $("#ne-publish").addEventListener("click", async () => {
   const title = $("#ne-title").value.trim(), a = $("#ne-audio").value, i = $("#ne-image").value;
@@ -1195,7 +1232,9 @@ for (const id of ["dn-pod", "dn-yt", "dn-pod-t", "dn-yt-t"]) $("#" + id).addEven
 // "Add it to the podcast feed" ticked replaces all four podcast fields and wins over the
 // description tool, since its result arrives later.
 function updateMarks() {
-  const renderPod = [...document.querySelectorAll(".o-feed")].some((b) => b.checked && !b.disabled);
+  // Picking a video as the episode's audio offers "Extract the audio", which also replaces all four.
+  const renderPod = [...document.querySelectorAll(".o-feed")].some((b) => b.checked && !b.disabled)
+    || $("#ne-audio").value.startsWith("video:");
   const renderYt = [...document.querySelectorAll(".o-youtube")].some((b) => b.checked);
   const dnPod = $("#dn-pod").checked, dnPodT = $("#dn-pod-t").checked;
   const dnYt = $("#dn-yt").checked, dnYtT = $("#dn-yt-t").checked;
@@ -1207,7 +1246,7 @@ function updateMarks() {
   pl.hidden = !(renderPod || dnPod); yl.hidden = !dnYt;
   const pm = pl.querySelector(".rmark").outerHTML, ym = yl.querySelector(".rmark").outerHTML;
   pl.innerHTML = pm + " " + (renderPod
-    ? `<span class="how">The render</span> (“Add it to the podcast feed as a draft” ticked) will replace the marked fields when it finishes.${dnPod ? " It wins over the AI description, since it finishes later." : ""}`
+    ? `<span class="how">${$("#ne-audio").value.startsWith("video:") ? "Extracting the audio" : "The render"}</span>${$("#ne-audio").value.startsWith("video:") ? "" : " (“Add it to the podcast feed as a draft” ticked)"} will replace the marked fields when it finishes.${dnPod ? " It wins over the AI description, since it finishes later." : ""}`
     : `<span class="how">The AI description</span> (Description section) will replace the marked ${dnPodT ? "title and description" : "description"}.`) + " You can still change them before publishing.";
   yl.innerHTML = ym + ` <span class="how">The AI description</span> (Description section) will replace the marked ${dnYtT ? "title and description" : "description"}. You can still change them.`;
   $("#dn-pod-clash").hidden = !(dnPod && renderPod);

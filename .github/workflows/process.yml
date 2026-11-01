@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "list = check Drive. render = cut a video. describe = AI description of one file. youtube = upload one video as private."
+        description: "list = check Drive. render = cut a video. describe = AI description of one file. youtube = upload one video as private. extract = podcast audio from one video."
         type: choice
-        options: ["list", "render", "describe", "youtube"]
+        options: ["list", "render", "describe", "youtube", "extract"]
         default: "list"
       job:
         description: "For render, describe and youtube: the job JSON (see README)"

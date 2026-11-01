@@ -69,7 +69,7 @@ def duration_of(media: Path) -> float:
 
 
 def save_draft(mp3: Path, cover: Path | None, title: str, description: str, source: str,
-               output_name: str, work: Path, client=None) -> dict:
+               output_name: str, work: Path, client=None, extra: dict | None = None) -> dict:
     """Upload the episode files and its draft record. Returns the draft."""
     missing = missing_settings()
     if missing:
@@ -100,6 +100,7 @@ def save_draft(mp3: Path, cover: Path | None, title: str, description: str, sour
         "output": output_name,
         "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "run": os.environ.get("GITHUB_RUN_ID", ""),
+        **(extra or {}),
     }
     _replace_draft(s3, bucket, draft)
     return draft

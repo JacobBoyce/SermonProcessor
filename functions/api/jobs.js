@@ -101,6 +101,13 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
       thumbnail: DRIVE_ID.test(String(job.thumbnail || "")) ? job.thumbnail : null, name: cut(job.name, 200) };
     if (!job.title.trim()) throw new AppError("The video needs a title");
     label = `YouTube upload: ${job.name || job.title}`;
+  } else if (action === "extract") {
+    // Podcast audio from a whole video in Drive, saved as the next episode.
+    if (!DRIVE_ID.test(String(job?.video || ""))) throw new AppError("Pick a video to take the audio from");
+    job = { video: job.video, name: cut(job.name, 300), describe: Boolean(job.describe),
+      thumbnail: DRIVE_ID.test(String(job.thumbnail || "")) ? job.thumbnail : null,
+      title: cut(job.title, 200), description: cut(job.description, 4000), instructions: cut(job.instructions, 4000) };
+    label = `Podcast audio: ${job.name.split("/").pop() || "video"}`;
   } else {
     throw new AppError("Unknown action");
   }
