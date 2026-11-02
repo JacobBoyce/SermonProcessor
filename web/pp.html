@@ -17,7 +17,7 @@
   </div>
 
   <h1>Privacy Policy</h1>
-  <p class="muted">Effective October 24, 2026</p>
+  <p class="muted">Effective November 2, 2026</p>
 
   <p>Sermon Processor (“the app”, “we”) is a tool run by volunteers at River Lake Church for the church's own use. It edits recordings of Sunday services and prepares them for the church's YouTube channel and podcast. This policy explains what data the app accesses, how it is used, where it is stored, who it is shared with, and how to have it removed.</p>
   <p>Contact for anything in this policy: <a href="mailto:boysee4545@gmail.com">boysee4545@gmail.com</a>.</p>
@@ -40,6 +40,11 @@
       <td>Uploads an edited video to the church's channel as a <strong>private</strong> video, with its title, description and thumbnail, when a volunteer ticks that option.</td>
       <td>Does not publish videos, read viewing history, comments, subscribers or analytics, or change existing videos.</td>
     </tr>
+    <tr>
+      <td><strong>Gmail</strong><br><code>https://www.googleapis.com/auth/gmail.send</code></td>
+      <td>Sends a short “your run is done” email from the church account to the address a volunteer entered when they ticked “Email me when it's done”.</td>
+      <td>Does not read, search, change or delete any email, and sends nothing else.</td>
+    </tr>
   </table>
   </div>
   <p>Content handled this way is the church's own: recordings of its services, its graphics and the text written about its sermons.</p>
@@ -50,6 +55,8 @@
   <h2>4. Other data</h2>
   <ul>
     <li><strong>Volunteer sign-in.</strong> Volunteers sign in to the app with their email address through Cloudflare Access, or with a shared passcode. The app records the email of the volunteer who started an edit or published a podcast episode, so the team can see who did what.</li>
+    <li><strong>Activity log.</strong> To keep the team accountable and help fix problems, the app records what each signed-in volunteer does in it (for example: opened the app, started a render, published a podcast episode, changed the podcast's settings), with their email address and the time. Volunteers can view this log in the app. Entries are deleted after 12 months.</li>
+    <li><strong>Notification emails.</strong> If a volunteer asks to be emailed when a run finishes, the address they enter is used only for that email and is recorded in the activity log.</li>
     <li><strong>Browser storage.</strong> The app may remember the passcode and a few display settings in the volunteer's own browser. It uses no advertising or analytics cookies. Cloudflare Access sets a sign-in cookie.</li>
     <li><strong>Podcast feed.</strong> Episodes the church publishes, with the show's name, description, author and contact email, are public by design so podcast apps can list them.</li>
   </ul>

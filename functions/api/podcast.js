@@ -5,6 +5,7 @@ import { AppError, drive } from "../../lib/google.js";
 import { json, wrap } from "../../lib/http.js";
 import { bucket, copyFromDrive, getDraft, getEpisodes, getShow, putJson } from "../../lib/podcast.js";
 import { dropEpisodeStats, readStats } from "../../lib/stats.js";
+import { logEvent } from "../../lib/audit.js";
 
 const ID = /^[0-9a-f]{32}$/;
 const DRIVE_ID = /^[\w-]{10,}$/;
@@ -62,14 +63,19 @@ export const onRequestGet = wrap(async ({ env, request }) => {
   return json({ configured: true, feedUrl: `${origin}/podcast/feed.xml`, show, draft, episodes, stats });
 });
 
-export const onRequestPost = wrap(async ({ env, request, data }) => {
+const SHOW_LABELS = { title: "Show name", description: "About the show", author: "Author", email: "Owner email",
+  language: "Language", category: "Category", subcategory: "Subcategory", link: "Website", explicit: "Explicit", test: "Test feed", image: "Show cover" };
+
+export const onRequestPost = wrap(async (ctx) => {
+  const { env, request, data } = ctx;
   const body = (await request.json().catch(() => null)) || {};
   const b = bucket(env);
   const who = data?.user?.email || "";
 
   if (body.action === "show") {
     const s = body.show || {};
-    const show = { ...(await getShow(env)) };
+    const before = await getShow(env);
+    const show = { ...before };
     for (const k of ["title", "author", "email", "language", "category", "subcategory", "link"]) {
       if (k in s) show[k] = clean(s[k], 300);
     }
@@ -87,6 +93,10 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
       show.image = key;
     }
     await putJson(env, "podcast/show.json", show);
+    const changes = Object.keys(SHOW_LABELS).filter((k) => JSON.stringify(before[k] ?? "") !== JSON.stringify(show[k] ?? ""))
+      .map((k) => ({ field: SHOW_LABELS[k], from: k === "image" ? (before.image ? "previous cover" : "none") : before[k] ?? "",
+        to: k === "image" ? `picture from Drive (${s.coverName || s.coverId})` : show[k] ?? "" }));
+    if (changes.length) logEvent(ctx, "settings", `Changed podcast channel settings: ${changes.map((c) => c.field).join(", ")}`, { changes });
     return json({ ok: true, show, warning });
   }
 
@@ -130,11 +140,14 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
       await b.delete("podcast/draft.json");
       await dropUnused(env, [draft.audio, draft.image], nextEpisodes);
     }
+    logEvent(ctx, "podcast", `Published “${title}” to the podcast feed`, { title, audio: body.audio === "draft" ? `rendered: ${ep.source}` : "picked from Drive",
+      image: body.image === "draft" ? "rendered thumbnail" : body.image ? "picked from Drive" : "show cover", description: description.slice(0, 300) });
     return json({ ok: true, episode: ep, warning });
   }
 
   if (body.action === "clear") {
     if (!draft) return json({ ok: true });
+    logEvent(ctx, "podcast", `Cleared the waiting episode “${draft.title}”`, { source: draft.source });
     await b.delete("podcast/draft.json");
     await dropUnused(env, [draft.audio, draft.image], episodes);
     return json({ ok: true });
@@ -149,6 +162,7 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
     if ("title" in body) episodes[i].title = clean(body.title, 200) || episodes[i].title;
     if ("description" in body) episodes[i].description = clean(body.description, 4000);
     await putJson(env, "podcast/episodes.json", episodes);
+    logEvent(ctx, "podcast", `Edited the published episode “${episodes[i].title}”`, { id });
     return json({ ok: true, episode: episodes[i] });
   }
 
@@ -159,6 +173,7 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
     await putJson(env, "podcast/episodes.json", rest);
     if (!ep.imported) await dropUnused(env, [ep.audio, ep.image], [...rest, draft]);
     await dropEpisodeStats(env, id).catch(() => {});
+    logEvent(ctx, "podcast", `Took “${ep.title}” out of the podcast feed`, { id, published: ep.published });
     return json({ ok: true });
   }
 

@@ -38,6 +38,7 @@ from drive import Drive, DriveError  # noqa: E402
 import describe  # noqa: E402
 import podcast  # noqa: E402
 import youtube  # noqa: E402
+import notify  # noqa: E402
 
 FOLDERS = ("Incoming", "Graphics", "Thumbnails", "Output")
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".mts", ".avi"}
@@ -625,6 +626,21 @@ def do_youtube(drive, root_id: str, job: dict, work: Path) -> None:
         raise
 
 
+def email_when_done(job: dict, ok: bool, error: str) -> None:
+    """Send the "Email me when it's done" message, if one was asked for. Never fails the run."""
+    n = job.get("notify") or {}
+    to = str(n.get("to") or "").strip()
+    if not to:
+        return
+    try:
+        notify.send(to, str(n.get("label") or ""), ok, RESULTS, error, str(n.get("app") or ""))
+        print(f"\nEmailed {to}")
+        summary(f"\n**Emailed** {to}")
+    except Exception as exc:   # noqa: BLE001
+        print(f"\nEmail to {to} not sent: {exc}")
+        summary(f"\n**Email not sent:** {exc}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Process a sermon video from Google Drive.")
     parser.add_argument("action", choices=["list", "render", "describe", "youtube", "extract"])
@@ -647,14 +663,22 @@ def main() -> int:
             job = json.loads(Path(text).read_text()) if text.endswith(".json") and Path(text).is_file() \
                 else json.loads(text)
             args.work.mkdir(parents=True, exist_ok=True)
-            if args.action == "describe":
-                do_describe(drive, root_id, job, args.work)
-            elif args.action == "youtube":
-                do_youtube(drive, root_id, job, args.work)
-            elif args.action == "extract":
-                do_extract(drive, root_id, job, args.work)
-            else:
-                do_render(drive, root_id, job, args.work, args.height or None)
+            ok, error = False, ""
+            try:
+                if args.action == "describe":
+                    do_describe(drive, root_id, job, args.work)
+                elif args.action == "youtube":
+                    do_youtube(drive, root_id, job, args.work)
+                elif args.action == "extract":
+                    do_extract(drive, root_id, job, args.work)
+                else:
+                    do_render(drive, root_id, job, args.work, args.height or None)
+                ok = True
+            except BaseException as exc:
+                error = str(exc) or exc.__class__.__name__
+                raise
+            finally:
+                email_when_done(job, ok, error)
     except json.JSONDecodeError as exc:
         print(f"\nThe job isn't valid JSON: {exc}", file=sys.stderr)
         return 2

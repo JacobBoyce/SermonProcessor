@@ -45,6 +45,7 @@ jobs:
       R2_ENDPOINT: ${{ vars.R2_ENDPOINT || secrets.R2_ENDPOINT }}
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
       YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      NOTIFY_REFRESH_TOKEN: ${{ secrets.NOTIFY_REFRESH_TOKEN }}
       YOUTUBE_CATEGORY: ${{ vars.YOUTUBE_CATEGORY || secrets.YOUTUBE_CATEGORY }}
     steps:
       - uses: actions/checkout@v4

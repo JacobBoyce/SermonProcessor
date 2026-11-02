@@ -149,6 +149,37 @@ button.danger { color: var(--bad); }
 .panel.fold > details > .stack { padding: 0 18px 18px; }
 .legend .how { font-weight: 600; }
 .check.sub { margin-left: 28px; font-size: .85rem; }
+.notify { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; font-size: .85rem; }
+.notify .nt-to { width: min(280px, 100%); padding: 6px 9px; font-size: .85rem; }
+.confirm { border: 1px solid var(--warn); border-radius: 9px; padding: 12px 14px; display: grid; gap: 10px; background: var(--sunk); }
+.confirm p { margin: 0; }
+.changes { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; font-size: .88rem; }
+.changes .old { color: var(--muted); text-decoration: line-through; overflow-wrap: anywhere; }
+.changes .new { font-weight: 600; overflow-wrap: anywhere; }
+.changes .why { display: block; color: var(--warn); font-size: .8rem; }
+.act-open { position: fixed; left: max(10px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); z-index: 5;
+  font-size: .78rem; padding: 4px 10px; border-radius: 6px; }
+dialog.act { width: min(860px, calc(100vw - 24px)); max-height: calc(100vh - 40px); padding: 0; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface); color: var(--fg); }
+dialog.act::backdrop { background: rgb(0 0 0 / .35); }
+.act-head { display: flex; align-items: baseline; gap: 12px; padding: 16px 18px 6px; position: sticky; top: 0; background: var(--surface); }
+.act-head .x { margin-left: auto; border: 0; background: none; font-size: 1.4rem; line-height: 1; color: var(--muted); padding: 0 4px; }
+.act-tools { display: flex; gap: 8px; flex-wrap: wrap; padding: 6px 18px; }
+.act-tools select, .act-tools input { flex: 1 1 140px; }
+#act-count { padding: 0 18px; margin: 4px 0; }
+.act-list { padding: 0 18px 18px; display: grid; gap: 4px; }
+.act-day { margin: 12px 0 2px; font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.act-row { display: grid; grid-template-columns: 4.6em 7.5em minmax(0, 1fr); gap: 4px 10px; align-items: baseline; text-align: left;
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); color: var(--fg); font: inherit; font-size: .88rem; cursor: pointer; }
+.act-row:hover { border-color: var(--muted); }
+.act-row .t { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
+.act-row .k { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.act-row .k.podcast { color: var(--accent); } .act-row .k.youtube { color: var(--yt); } .act-row .k.settings { color: var(--warn); }
+.act-row .w { grid-column: 3; font-size: .78rem; color: var(--muted); }
+.act-row .s { grid-column: 3; grid-row: 1; overflow-wrap: anywhere; }
+.act-detail { grid-column: 1 / -1; margin: 6px 0 0; font-size: .8rem; display: grid; gap: 3px; cursor: text; }
+.act-detail div { overflow-wrap: anywhere; } .act-detail b { color: var(--muted); font-weight: 600; }
+@media (max-width: 560px) { .act-row { grid-template-columns: 4.2em minmax(0, 1fr); } .act-row .k { display: none; } .act-row .s, .act-row .w { grid-column: 2; } }
 .extract { border: 1px dashed var(--accent); border-radius: 9px; padding: 12px; display: grid; gap: 8px; }
 .extract p { margin: 0; }
 .ai-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -304,6 +335,7 @@ footer.version a { color: inherit; }
         <section class="sendbar" aria-label="Send">
           <ul class="errors" id="errors"></ul>
           <p class="warn-line" id="send-feed-warn" hidden><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> This render will replace the fields marked <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> in <b>Podcast episode</b> below.</p>
+          <div class="notify" data-for="render"><label class="check"><input type="checkbox" class="nt-on"> Email me when it's done</label><input type="email" class="nt-to" maxlength="200" placeholder="name@example.com" aria-label="Email address to notify"></div>
           <button class="primary" type="button" id="send">Send to render</button>
           <div id="send-msg" class="notice" hidden></div>
         </section>
@@ -332,6 +364,7 @@ footer.version a { color: inherit; }
                   <label class="check"><input type="checkbox" id="ne-x-title" checked> Write the title with AI</label>
                   <label class="check"><input type="checkbox" id="ne-x-desc" checked> Write the description with AI</label>
                   <p class="warn-line"><span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span> Replaces the next episode's <span id="ne-x-what">audio, image, title and description</span> when it finishes (about 5–15 minutes, longer for a big 4K file).</p>
+                  <div class="notify" data-for="extract"><label class="check"><input type="checkbox" class="nt-on"> Email me when it's done</label><input type="email" class="nt-to" maxlength="200" placeholder="name@example.com" aria-label="Email address to notify"></div>
                   <div class="ai-row"><button type="button" class="primary" id="ne-x-go">Extract the audio</button><span class="hint" id="ne-x-msg"></span></div>
                 </div>
                 <label for="ne-image"><span>Episode image <span class="rmark pod" title="Podcast: replaced by a render with “Add it to the podcast feed as a draft” ticked, or by an AI description with “Fill in the podcast episode” ticked" aria-label="podcast field that can be filled in automatically">✱</span></span>
@@ -389,7 +422,13 @@ footer.version a { color: inherit; }
                   </label>
                 </div>
                 <label class="check"><input type="checkbox" id="show-test"> Test feed: ask podcast directories not to list it</label>
-                <div class="row spread"><span class="hint" id="show-msg"></span><button type="button" id="show-save">Save channel settings</button></div>
+                <div class="row spread"><span class="hint" id="show-msg"></span>
+                  <span class="row" style="gap:10px"><button type="button" class="link" id="show-undo" hidden>Undo my edits</button><button type="button" id="show-save" disabled>No changes to save</button></span></div>
+                <div class="confirm" id="show-confirm" hidden role="alertdialog" aria-labelledby="show-confirm-h">
+                  <p id="show-confirm-h"><b>Change the podcast channel settings?</b> Podcast apps show these to every listener the next time they check the feed.</p>
+                  <ul class="changes" id="show-changes"></ul>
+                  <div class="row" style="justify-content:flex-end;gap:10px"><button type="button" id="show-cancel">Cancel</button><button type="button" class="primary" id="show-yes">Yes, save these changes</button></div>
+                </div>
               </div>
             </details>
           </div>
@@ -415,6 +454,7 @@ footer.version a { color: inherit; }
             <p class="hint legend" id="yt-legend"><span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span> Filled in by an AI description (Description section) with “Fill in the YouTube upload” ticked. You can still change them.</p>
             <label for="yt-title"><span>Title <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></span><input id="yt-title" maxlength="100" placeholder="Type one, or write it with AI below"></label>
             <label for="yt-desc"><span>Description <span class="rmark yt" title="YouTube: replaced by an AI description with “Fill in the YouTube upload” ticked" aria-label="YouTube field that can be filled in automatically">✱</span></span><textarea id="yt-desc" rows="5" maxlength="5000"></textarea></label>
+            <div class="notify" data-for="youtube"><label class="check"><input type="checkbox" class="nt-on"> Email me when it's done</label><input type="email" class="nt-to" maxlength="200" placeholder="name@example.com" aria-label="Email address to notify"></div>
             <div class="row" style="justify-content:flex-end;gap:10px">
               <span class="hint" id="yt-msg"></span>
               <button type="button" class="primary" id="yt-send">Upload to YouTube as private</button>
@@ -435,6 +475,18 @@ footer.version a { color: inherit; }
 
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <footer class="version" id="version">Version …</footer>
+<button type="button" class="act-open" id="act-open" hidden>Activity log</button>
+<dialog class="act" id="act" aria-labelledby="act-h">
+  <div class="act-head"><h2 id="act-h">Activity log</h2><span class="hint">Who did what in the app. Kept for 12 months.</span><button type="button" class="x" id="act-close" aria-label="Close">×</button></div>
+  <div class="act-tools">
+    <select id="act-month" aria-label="Month"></select>
+    <select id="act-who" aria-label="Person"></select>
+    <select id="act-kind" aria-label="Type"></select>
+    <input type="search" id="act-q" placeholder="Search" aria-label="Search the log">
+  </div>
+  <p class="hint" id="act-count"></p>
+  <div class="act-list" id="act-list"></div>
+</dialog>
 
 <template id="part-tpl">
   <div class="part">
@@ -894,7 +946,7 @@ $("#send").addEventListener("click", async () => {
     await api("/api/jobs", { method: "POST", body: JSON.stringify({
       job: { source: v.path, outputs: outs, describe: { enabled: v.descriptionFile ? true : $("#describe").checked,
         instructions: $("#custom-instr").checked ? $("#instructions").value.trim() : "" } },
-      height: $("#height").value, label: `Render ${v.path}`,
+      height: $("#height").value, label: `Render ${v.path}`, notify: notifyFor("render"),
     }) });
     showSendMsg("ok", "Sent. It appears under Recent runs in a few seconds, and a notice pops up here when it's finished.");
     watch.pending.push({ label: `Render ${v.path}`, at: Date.now() }); saveWatch();
@@ -963,6 +1015,8 @@ async function loadPodcast() {
 function fillShow() {
   const s = pod.show;
   if (document.activeElement?.closest("#pod-show")) return;      // don't overwrite while someone is typing
+  if (showEdited && !fillShow.force) return;                       // keep unsaved edits
+  fillShow.force = false; showEdited = false;
   $("#show-title").value = s.title || ""; $("#show-desc").value = s.description || "";
   $("#show-author").value = s.author || ""; $("#show-email").value = s.email || "";
   $("#show-test").checked = !!s.test;
@@ -970,23 +1024,63 @@ function fillShow() {
   sel.innerHTML = `<option value="">${s.image ? "Keep the current cover" : "No cover yet"}</option>` +
     files.graphics.map((g) => `<option value="${g.id}">${esc(g.path)}</option>`).join("");
   showCoverPreview();
+  syncShowSave();
 }
+// Channel settings change what every listener sees, so edits are only saved after
+// "Save changes" and a confirmation that lists each change (old -> new).
+function showChanges() {
+  if (!pod?.show) return [];
+  const s = pod.show, out = [];
+  const add = (field, from, to, why = "") => { if (String(from ?? "") !== String(to ?? "")) out.push({ field, from, to, why }); };
+  add("Show name", s.title, $("#show-title").value.trim());
+  add("About the show", s.description, $("#show-desc").value.trim());
+  add("Author", s.author, $("#show-author").value.trim());
+  add("Owner email", s.email, $("#show-email").value.trim(), "Apple and Spotify send ownership codes to this address, and it's public in the feed.");
+  add("Test feed", s.test ? "On" : "Off", $("#show-test").checked ? "On" : "Off",
+    $("#show-test").checked ? "Directories will be asked not to list the show." : "Spotify, Apple and other directories may list the show publicly.");
+  const cover = $("#show-cover").value;
+  if (cover) out.push({ field: "Show cover", from: s.image ? "the current cover" : "none", to: files.graphics.find((g) => g.id === cover)?.path || "a new picture",
+    why: "Podcast apps can take a day or more to show a new cover." });
+  return out;
+}
+function syncShowSave() {
+  const n = showChanges().length, btn = $("#show-save");
+  btn.disabled = !n;
+  btn.className = n ? "primary" : "";
+  btn.textContent = n ? `Save ${n} change${n === 1 ? "" : "s"}…` : "No changes to save";
+  $("#show-undo").hidden = !n;
+  if (!n) $("#show-confirm").hidden = true;
+}
+const short = (v) => { const t = String(v ?? "").trim(); return t ? (t.length > 140 ? t.slice(0, 140) + "…" : t) : "(empty)"; };
+let showEdited = false;     // someone has typed in channel settings since they were last loaded
+$("#pod-show").addEventListener("input", () => { showEdited = true; syncShowSave(); });
+$("#pod-show").addEventListener("change", () => { showEdited = true; syncShowSave(); });
+$("#show-undo").addEventListener("click", () => { fillShow.force = true; document.activeElement?.blur(); fillShow(); $("#show-msg").textContent = "Your edits were undone."; });
+$("#show-cancel").addEventListener("click", () => { $("#show-confirm").hidden = true; $("#show-save").focus(); });
 function showCoverPreview() {
   const id = $("#show-cover").value, p = $("#show-cover-prev");
   p.innerHTML = id ? `<img alt="" src="${img(id)}">` : pod?.show.image ? `<img alt="" src="${media(pod.show.image)}">` : "None";
 }
 $("#show-cover").addEventListener("change", showCoverPreview);
-$("#show-save").addEventListener("click", async () => {
-  const btn = $("#show-save"); btn.disabled = true; $("#show-msg").textContent = "Saving…";
+$("#show-save").addEventListener("click", () => {
+  const changes = showChanges();
+  if (!changes.length) return;
+  $("#show-changes").innerHTML = changes.map((c) => `<li><b>${esc(c.field)}:</b> <span class="old" title="${esc(c.from)}">${esc(short(c.from))}</span> → <span class="new" title="${esc(c.to)}">${esc(short(c.to))}</span>${c.why ? `<span class="why">${esc(c.why)}</span>` : ""}</li>`).join("");
+  $("#show-confirm").hidden = false;
+  $("#show-yes").focus();
+});
+$("#show-yes").addEventListener("click", async () => {
+  const btn = $("#show-yes"); btn.disabled = true; $("#show-msg").textContent = "Saving…";
   try {
     const r = await podPost({ action: "show", show: {
       title: $("#show-title").value, description: $("#show-desc").value, author: $("#show-author").value,
-      email: $("#show-email").value, test: $("#show-test").checked, coverId: $("#show-cover").value || undefined } });
+      email: $("#show-email").value, test: $("#show-test").checked, coverId: $("#show-cover").value || undefined,
+      coverName: files.graphics.find((g) => g.id === $("#show-cover").value)?.path } });
     pod.show = r.show;
     $("#show-msg").textContent = r.warning || "Saved. Podcast apps pick up changes the next time they check the feed.";
     neCover();
     $("#feed-test").hidden = !r.show.test;
-    $("#show-cover").value = ""; fillShow();
+    $("#show-cover").value = ""; $("#show-confirm").hidden = true; fillShow.force = true; document.activeElement?.blur(); fillShow();
   } catch (e) { if (e.message !== "locked") $("#show-msg").textContent = e.message; }
   finally { btn.disabled = false; }
 });
@@ -1082,7 +1176,7 @@ $("#ne-x-go").addEventListener("click", async () => {
   const pick = $("#ne-image").value;
   const thumbnail = pick && pick !== "draft" ? pick : bestThumb(vid.name) || null;
   try {
-    await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "extract", job: {
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "extract", notify: notifyFor("extract"), job: {
       video: vid.id, name: vid.path, thumbnail, aiTitle: $("#ne-x-title").checked, aiDescription: $("#ne-x-desc").checked,
       title: $("#ne-title").value, description: $("#ne-desc").value,
       instructions: $("#custom-instr").checked ? $("#instructions").value.trim() : "" } }) });
@@ -1191,6 +1285,94 @@ $("#eps-csv").addEventListener("click", (ev) => {
   const a = Object.assign(document.createElement("a"), { href: url, download: `podcast-episodes-${new Date().toISOString().slice(0, 10)}.csv` });
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
+
+// ---------- "Email me when it's done" next to the render, extract and YouTube buttons.
+// On by default, filled in with the signed-in email; the address can be changed (kept per browser).
+let signedInEmail = "";
+function setupNotify() {
+  const saved = store.get("sp-notify-to");
+  for (const box of document.querySelectorAll(".notify")) {
+    const on = $(".nt-on", box), to = $(".nt-to", box), key = "sp-notify-on-" + box.dataset.for;
+    const pref = store.get(key);
+    to.value = saved || signedInEmail;
+    on.checked = pref ? pref === "1" : Boolean(to.value);
+    to.hidden = !on.checked;
+    on.onchange = () => { store.set(key, on.checked ? "1" : "0"); to.hidden = !on.checked; if (on.checked && !to.value) to.focus(); };
+    to.onchange = () => {
+      const v = to.value.trim(); store.set("sp-notify-to", v);
+      document.querySelectorAll(".nt-to").forEach((o) => { if (o !== to) o.value = v; });
+    };
+  }
+}
+const notifyFor = (which) => {
+  const box = document.querySelector(`.notify[data-for="${which}"]`);
+  return box && $(".nt-on", box).checked ? $(".nt-to", box).value.trim() : "";
+};
+
+// ---------- activity log (corner button)
+let act = { month: "", events: [] };
+const KIND_CHIPS = { "sign-in": "Sign-in", render: "Render", podcast: "Podcast", youtube: "YouTube", description: "AI text", settings: "Settings" };
+const KIND_NAMES = { "": "Everything", "sign-in": "Sign-ins", render: "Renders", podcast: "Podcast", youtube: "YouTube", description: "AI descriptions", settings: "Settings changes" };
+async function loadActivity(month = "") {
+  $("#act-list").innerHTML = `<p class="hint">Loading…</p>`;
+  try { act = await api(`/api/activity${month ? `?month=${month}` : ""}`); }
+  catch (e) { if (e.message !== "locked") $("#act-list").innerHTML = `<p class="notice bad">${esc(e.message)}</p>`; return; }
+  const mSel = $("#act-month");
+  const months = act.months.includes(act.month) ? act.months : [act.month, ...act.months];
+  mSel.innerHTML = months.map((m) => `<option value="${m}">${new Date(m + "-15").toLocaleDateString(undefined, { month: "long", year: "numeric" })}</option>`).join("");
+  mSel.value = act.month;
+  const who = [...new Set(act.events.map((e) => e.who))].sort(), wSel = $("#act-who"), keepW = wSel.value;
+  wSel.innerHTML = `<option value="">Everyone</option>` + who.map((w) => `<option>${esc(w)}</option>`).join("");
+  if (who.includes(keepW)) wSel.value = keepW;
+  const kSel = $("#act-kind"), keepK = kSel.value;
+  kSel.innerHTML = Object.entries(KIND_NAMES).map(([k, n]) => `<option value="${k}">${n}</option>`).join("");
+  kSel.value = keepK || "";
+  renderActivity();
+}
+function renderActivity() {
+  const who = $("#act-who").value, kind = $("#act-kind").value, q = $("#act-q").value.trim().toLowerCase();
+  const list = act.events.filter((e) => (!who || e.who === who) && (!kind || e.kind === kind) &&
+    (!q || `${e.summary} ${e.who}`.toLowerCase().includes(q)));
+  $("#act-count").textContent = act.events.length ? `${list.length} of ${act.events.length} entries` : "";
+  const box = $("#act-list");
+  if (!list.length) { box.innerHTML = `<p class="hint">${act.events.length ? "Nothing matches." : "Nothing logged this month yet."}</p>`; return; }
+  let day = "", html = "";
+  for (const e of list) {
+    const d = new Date(e.at), dk = d.toDateString();
+    if (dk !== day) { day = dk; html += `<div class="act-day">${d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</div>`; }
+    html += `<button type="button" class="act-row" data-key="${esc(e.key)}"><span class="t">${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</span>
+      <span class="k ${esc(e.kind)}">${esc(KIND_CHIPS[e.kind] || e.kind)}</span><span class="s">${esc(e.summary)}</span><span class="w">${esc(e.who)}</span></button>`;
+  }
+  box.innerHTML = html;
+}
+// Details as label: value lines; lists of changes as old -> new.
+function detailHtml(d) {
+  const line = (k, v) => `<div><b>${esc(k)}:</b> ${esc(typeof v === "object" ? JSON.stringify(v) : String(v))}</div>`;
+  const out = [];
+  for (const [k, v] of Object.entries(d || {})) {
+    if (v == null || v === "") continue;
+    if (k === "changes" && Array.isArray(v)) v.forEach((c) => out.push(`<div><b>${esc(c.field)}:</b> ${esc(short(c.from))} → ${esc(short(c.to))}</div>`));
+    else if (k === "outputs" && Array.isArray(v)) v.forEach((o) => out.push(`<div><b>Output “${esc(o.name)}”:</b> ${esc([o.parts, o.graphic ? `end graphic ${o.graphic}` : "",
+      o.podcast ? "podcast MP3" : "", o.feed ? "podcast feed draft" : "", o.youtube ? "YouTube (private)" : ""].filter(Boolean).join(" · "))}</div>`));
+    else out.push(line(k.replace(/([A-Z])/g, " $1").toLowerCase(), v));
+  }
+  return out.join("") || `<div class="hint">No more details.</div>`;
+}
+$("#act-list").addEventListener("click", async (ev) => {
+  const row = ev.target.closest(".act-row");
+  if (!row || ev.target.closest(".act-detail")) return;
+  const open = row.querySelector(".act-detail");
+  if (open) { open.remove(); return; }
+  const div = document.createElement("div"); div.className = "act-detail"; div.textContent = "Loading…"; row.append(div);
+  try { div.innerHTML = detailHtml((await api(`/api/activity?key=${encodeURIComponent(row.dataset.key)}`)).details); }
+  catch (e) { div.textContent = e.message; }
+});
+$("#act-open").addEventListener("click", () => { $("#act").showModal(); loadActivity($("#act-month").value || ""); });
+$("#act-close").addEventListener("click", () => $("#act").close());
+$("#act").addEventListener("click", (e) => { if (e.target === $("#act")) $("#act").close(); });
+$("#act-month").addEventListener("change", () => loadActivity($("#act-month").value));
+for (const id of ["act-who", "act-kind"]) $("#" + id).addEventListener("change", renderActivity);
+$("#act-q").addEventListener("input", renderActivity);
 
 // ---------- collapsible sections remember whether they were open
 for (const id of ["pod-fold", "yt-fold"]) {
@@ -1366,7 +1548,7 @@ $("#yt-send").addEventListener("click", async () => {
   if (!title) return ($("#yt-msg").textContent = "Give it a title first.");
   btn.disabled = true; $("#yt-msg").textContent = "Sending…";
   try {
-    await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "youtube",
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ action: "youtube", notify: notifyFor("youtube"),
       job: { video: id, name: v.name, title, description: $("#yt-desc").value, thumbnail: $("#yt-thumb").value || null } }) });
     watch.pending.push({ label: `YouTube upload: ${v.name}`.slice(0, 120), at: Date.now() }); saveWatch();
     $("#yt-msg").textContent = "Sent. It shows in Recent runs; when it finishes, the run links to the video in YouTube Studio.";
@@ -1470,6 +1652,7 @@ fetch("/version.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null
 function start() {
   $("#gate").hidden = true; $("#app").hidden = false;
   if (!document.querySelector(".output")) addOutput({ name: "YouTube", podcast: true, graphic: true });
+  setupNotify(); $("#act-open").hidden = false;
   loadFiles().then(() => { if (pod?.configured) { fillShow(); renderNext(); } renderYt(); renderDn(); }); loadRuns();
   loadPodcast().then(() => { renderDn(); dn.resume(); });
 }
@@ -1489,7 +1672,7 @@ async function boot() {
     if (r.status === 401 && s.signIn) return signedOut();
     if (r.ok) {
       needPasscode = s.passcode !== false;
-      if (s.email) { $("#who").textContent = s.email; $("#who").hidden = false; $("#signout").hidden = false; }
+      if (s.email) { signedInEmail = s.email; $("#who").textContent = s.email; $("#who").hidden = false; $("#signout").hidden = false; }
       $("#lock").hidden = !needPasscode;
     }
   } catch { /* fall back to the passcode screen */ }

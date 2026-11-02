@@ -6,6 +6,7 @@
 //  - With neither, the app stays locked.
 import { accessConfigured, verifyAccess } from "../../lib/access.js";
 import { json } from "../../lib/http.js";
+import { logVisit } from "../../lib/audit.js";
 
 function same(a, b) {
   if (a.length !== b.length) return false;
@@ -31,6 +32,7 @@ export async function onRequest(ctx) {
   const url = new URL(request.url);
   // /api/session tells the page whether it needs to ask for the passcode.
   if (url.pathname === "/api/session") {
+    if (ctx.data.user?.email) logVisit(ctx);     // "opened the app", for the activity log
     return json({ passcode: Boolean(env.APP_PASSCODE), email: ctx.data.user?.email || null, access });
   }
   if (env.APP_PASSCODE) {

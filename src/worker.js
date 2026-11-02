@@ -7,6 +7,7 @@ import * as image from "../functions/api/image/[id].js";
 import * as video from "../functions/api/video/[id].js";
 import * as podcastApi from "../functions/api/podcast.js";
 import * as describeApi from "../functions/api/describe.js";
+import * as activityApi from "../functions/api/activity.js";
 import * as feed from "../functions/podcast/feed.xml.js";
 import * as media from "../functions/podcast/media/[[path]].js";
 import { json } from "../lib/http.js";
@@ -14,7 +15,7 @@ import { json } from "../lib/http.js";
 function route(request, env, ctx) {
   const { pathname } = new URL(request.url);
   const method = request.method;
-  const base = { request, env, waitUntil: ctx.waitUntil.bind(ctx), params: {} };
+  const base = { request, env, waitUntil: ctx.waitUntil.bind(ctx), data: ctx.data || {}, params: {} };
   if (pathname === "/api/files" && method === "GET") return files.onRequestGet(base);
   if (pathname === "/api/jobs" && method === "GET") return jobs.onRequestGet(base);
   if (pathname === "/api/jobs" && method === "POST") return jobs.onRequestPost(base);
@@ -25,6 +26,7 @@ function route(request, env, ctx) {
   if (pathname === "/api/podcast" && method === "GET") return podcastApi.onRequestGet(base);
   if (pathname === "/api/podcast" && method === "POST") return podcastApi.onRequestPost(base);
   if (pathname === "/api/describe" && method === "GET") return describeApi.onRequestGet(base);
+  if (pathname === "/api/activity" && method === "GET") return activityApi.onRequestGet(base);
   return json({ error: "Not found" }, 404);
 }
 
@@ -32,7 +34,8 @@ export default {
   async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     if (pathname.startsWith("/api/")) {
-      const c = { request, env, data: {}, next: () => route(request, env, ctx) };
+      const c = { request, env, data: {}, waitUntil: ctx.waitUntil.bind(ctx) };
+      c.next = () => route(request, env, { waitUntil: c.waitUntil, data: c.data });
       return checkPasscode(c);
     }
     // The podcast feed and its files are public, for podcast apps.

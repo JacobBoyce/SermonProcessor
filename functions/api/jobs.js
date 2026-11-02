@@ -1,6 +1,7 @@
 // GET /api/jobs: recent render runs.  POST /api/jobs: start a render on GitHub.
 import { AppError, drive } from "../../lib/google.js";
 import { json, wrap } from "../../lib/http.js";
+import { logEvent } from "../../lib/audit.js";
 
 const WORKFLOW = "process.yml";
 
@@ -75,7 +76,21 @@ const DRIVE_ID = /^[\w-]{10,}$/;
 const cut = (v, n) => String(v ?? "").slice(0, n);
 
 // POST body: { action: "render" (default) | "describe" | "youtube", job, height?, label? }
-export const onRequestPost = wrap(async ({ env, request, data }) => {
+// "Email me when it's done": one address. NOTIFY_ALLOW (optional, Cloudflare) limits who can
+// be emailed: a comma list of addresses and/or @domains, e.g. "@riverlakechurch.org, a@b.com".
+function notifyAddress(env, value) {
+  const to = String(value || "").trim().toLowerCase();
+  if (!to) return "";
+  if (!/^[^\s@,;<>"]+@[^\s@,;<>"]+\.[a-z]{2,}$/.test(to)) throw new AppError(`“${value}” doesn't look like an email address`);
+  const allow = String(env.NOTIFY_ALLOW || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (allow.length && !allow.some((a) => (a.startsWith("@") ? to.endsWith(a) : to === a))) {
+    throw new AppError(`Notifications can only go to ${allow.join(", ")}`);
+  }
+  return to;
+}
+
+export const onRequestPost = wrap(async (ctx) => {
+  const { env, request, data } = ctx;
   const body = await request.json().catch(() => null);
   const action = body?.action || "render";
   let job = body?.job, label, height = "source", extra = {};
@@ -112,11 +127,25 @@ export const onRequestPost = wrap(async ({ env, request, data }) => {
     throw new AppError("Unknown action");
   }
   if (data?.user?.email) job.requestedBy = data.user.email;   // recorded in the run's job details
+  const notify = notifyAddress(env, body?.notify);
+  if (notify) job.notify = { to: notify, label: label.slice(0, 120), app: `${new URL(request.url).origin}/app/` };
   const text = JSON.stringify(job);
   if (text.length > 60_000) throw new AppError("The job is too large");
   await github(env, `/actions/workflows/${WORKFLOW}/dispatches`, {
     method: "POST",
     body: JSON.stringify({ ref: "main", inputs: { action, job: text, output_height: height, label: label.slice(0, 120) } }),
   });
+  const what = {
+    render: [ "render", `Sent a render: ${job.source}` ],
+    describe: [ "description", `Asked AI for a description of ${job.name || "a file"}` ],
+    youtube: [ "youtube", `Sent a YouTube upload (private): ${job.name || job.title}` ],
+    extract: [ "podcast", `Sent podcast audio extraction: ${job.name}` ],
+  }[action];
+  const details = action === "render"
+    ? { source: job.source, resolution: height, outputs: job.outputs.map((o) => ({ name: o.name, podcast: !!o.podcast, feed: !!o.feed, youtube: !!o.youtube,
+        parts: (o.segments || [{ in: o.in, out: o.out }]).map((p) => `${p.in}–${p.out}`).join(", "), graphic: o.endGraphic?.file || null })) }
+    : { ...job, requestedBy: undefined, notify: undefined, description: job.description ? `${String(job.description).slice(0, 200)}…` : undefined };
+  if (notify) details.emailWhenDone = notify;
+  logEvent(ctx, what[0], what[1], details);
   return json({ ok: true, ...extra });
 });
